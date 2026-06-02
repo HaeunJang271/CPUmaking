@@ -5,7 +5,7 @@
 //   ADD  5 + 3 = 8,  ZERO=0
 //   SUB  8 - 3 = 5,  ZERO=0
 //   SUB  5 - 5 = 0,  ZERO=1
-//   AND  0xFF00 & 0x0F0F = 0, ZERO=1
+//   AND  0xFF00 & 0x00FF = 0, ZERO=1
 //   OR   0x00FF | 0xFF00 = 0xFFFF, ZERO=0
 //   XOR  0xAAAA ^ 0x5555 = 0xFFFF, ZERO=0
 // ============================================================================
@@ -90,12 +90,12 @@ module tb_alu;
         #10;
         check_result("SUB 5-5 (zero)", 16'd0, 1'b1);
 
-        // AND: 0xFF00 & 0x0F0F = 0
+        // AND: 0xFF00 & 0x00FF = 0
         A = 16'hFF00;
-        B = 16'h0F0F;
+        B = 16'h00FF;
         ALU_OP = 3'b010;
         #10;
-        check_result("AND FF00&0F0F", 16'h0000, 1'b1);
+        check_result("AND FF00&00FF", 16'h0000, 1'b1);
 
         // OR: 0x00FF | 0xFF00 = 0xFFFF
         A = 16'h00FF;
