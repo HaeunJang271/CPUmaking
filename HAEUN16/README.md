@@ -1,7 +1,7 @@
 # HAEUN-16
 
 Verilog-2001로 설계한 **16비트 CPU** 프로젝트입니다.  
-합성 가능한 RTL과 모듈별 테스트벤치, ISA 문서, 통합 시뮬레이션까지 포함합니다.
+모듈별 테스트벤치·ISA·통합 시뮬레이션, **Tang Nano 9K(GW1NR-9)** FPGA 이식 준비까지 포함합니다.
 
 ---
 
@@ -10,20 +10,74 @@ Verilog-2001로 설계한 **16비트 CPU** 프로젝트입니다.
 | 목표 | 상태 |
 |------|------|
 | 16비트 CPU 설계 | 완료 |
-| Verilog 코드 작성 | 완료 |
-| 시뮬레이션 성공 | 완료 (Icarus Verilog) |
-| FPGA 이식 가능 구조 | 합성 가능 RTL 기준 충족 |
-| VGA / 키보드 / OS 확장 | **향후 과제** (본 저장소 1~8단계 범위 밖) |
+| Verilog RTL 작성 | 완료 |
+| 시뮬레이션 검증 | 완료 (Icarus Verilog) |
+| ISA 문서 | 완료 (`ISA.md`) |
+| FPGA 이식 RTL | 완료 (`ram_fpga`, `top_tangnano9k`, `.cst`) |
+| Gowin 합성·Place & Route | 완료 (사용자 환경, `GW1NR-LV9QN88PC6/I5`) |
+| FPGA 보드 실기 동작 | **대기** — Program Device + LED 확인 |
+| VGA / 키보드 / OS | **향후 과제** |
+
+### CPU를 만들었나? / FPGA에서 돌아가나?
+
+| 질문 | 답 |
+|------|-----|
+| CPU를 만들었나? | **예.** 1~8단계 RTL + `tb_cpu` PASS (R0=8) |
+| FPGA 비트스트림? | **예.** Gowin Synthesize + PnR 완료 (보드 없이 가능한 범위) |
+| 보드에서 확인? | **아직.** USB 다운로드 후 LED 6개 ON = 최종 완성 |
 
 ---
 
-## 개발 규칙 (적용 내용)
+## 지금까지 한 일 (타임라인)
 
-1. 모듈별 개별 `.v` 파일
-2. 모듈마다 독립 `tb_*.v` 테스트벤치
-3. 소스/테스트벤치 주석 포함
-4. 합성 가능 Verilog (Verilog-2001, SystemVerilog 미사용)
-5. 단계별 검증 후 통합
+### CPU 코어 (1~8단계)
+
+| 단계 | 산출물 | 검증 |
+|------|--------|------|
+| 1 | `adder16.v`, `tb_adder16.v` | 5+3=8, 65535+1 오버플로 |
+| 2 | `register16.v`, `tb_register16.v` | load/hold/reset |
+| 3 | `alu.v`, `tb_alu.v` | ADD/SUB/AND/OR/XOR, ZERO |
+| 4 | `pc.v`, `tb_pc.v` | +1, jump, reset |
+| 5 | `ram.v`, `tb_ram.v` | 64KW RAM (시뮬용) |
+| 6 | `ISA.md` | 16bit 명령어·레지스터 R0~R3 |
+| 7 | `cpu.v` | Fetch1→Fetch2→Exec, 9개 opcode |
+| 8 | `tb_cpu.v` | LOAD/ADD 프로그램 → **R0=8** PASS |
+
+### FPGA (Tang Nano 9K)
+
+| 단계 | 산출물 | 내용 |
+|------|--------|------|
+| 준비 | Gowin EDA (Education) | Tang Nano 9K, **라이선스 불필요** |
+| 2 | [FPGA_RTL_REVIEW.md](FPGA_RTL_REVIEW.md) | `cpu`/`ram`/`tb_cpu` FPGA 관점 검토 |
+| 3 | `ram_fpga.v`, `program.mi` | 256×16 RAM (9K BSRAM 용량), 프로그램 init |
+| 3 | `cpu.v` | 내부 RAM → `ram_fpga` |
+| 4 | `top_tangnano9k.v`, `tangnano9k.cst` | 27MHz, 버튼 리셋, LED |
+| 4 | [fpga/GOWIN_PROJECT.md](fpga/GOWIN_PROJECT.md) | Gowin 프로젝트·빌드 방법 |
+| 5 | Gowin 프로젝트 `HAEUN16_9K` | Device **GW1NR-LV9QN88PC6/I5**, **Synthesize + PnR** |
+| 완성 보조 | [COMPLETION.md](COMPLETION.md), [BOARD_QUICKSTART.md](BOARD_QUICKSTART.md) | 빠른 완성·보드 10분 가이드 |
+| 도구 | `tools/asm.py`, `programs/demo.asm` | 어셈블리 → hex / `.mi` |
+
+### `top_tangnano9k` LED (보드 확인용)
+
+- **PASS 조건:** R0=8 이고 R1=3 → **LED 6개 전부 ON** (active-low `000000`)
+- top 수정 후 **Gowin에서 PnR 한 번 더** 실행 권장 (최신 `.fs`)
+
+---
+
+## 현재 위치
+
+```text
+CPU 설계·RTL·시뮬     완료
+ISA                  완료
+ram_fpga + top + cst 완료
+Gowin PnR            완료
+보드 Program + LED   대기
+```
+
+```text
+CPU + 시뮬 + Gowin PnR    ███████████████████░  ~95%
+보드 실기 확인            ░░░░░░░░░░░░░░░░░░░░   ~5%
+```
 
 ---
 
@@ -31,135 +85,191 @@ Verilog-2001로 설계한 **16비트 CPU** 프로젝트입니다.
 
 ```
 HAEUN16/
-├── adder16.v          # 16비트 가산기
-├── register16.v       # 16비트 레지스터
-├── alu.v              # ALU
-├── pc.v               # Program Counter
-├── ram.v              # 64KB RAM (65536 x 16bit)
-├── cpu.v              # CPU 통합
-├── tb_adder16.v
-├── tb_register16.v
-├── tb_alu.v
-├── tb_pc.v
-├── tb_ram.v
-├── tb_cpu.v           # CPU 통합 테스트
-├── ISA.md             # 명령어 집합 아키텍처
+├── adder16.v, register16.v, alu.v, pc.v
+├── ram.v                  # 65536 word (시뮬/교육, 9K BRAM 초과)
+├── ram_fpga.v             # 256 word (FPGA/CPU 실제 사용)
+├── cpu.v                  # CPU 통합 (ram_fpga)
+├── top_tangnano9k.v       # Tang Nano 9K 탑
+├── tangnano9k.cst         # 핀 제약
+├── program.mi             # BRAM init hex
+├── tb_*.v                 # 모듈·통합 테스트 (FPGA 빌드 제외)
+├── ISA.md
+├── FPGA_RTL_REVIEW.md
+├── COMPLETION.md          # 빠른 완성 체크리스트
+├── BOARD_QUICKSTART.md    # 보드 도착 후 10분
+├── fpga/GOWIN_PROJECT.md
+├── tools/asm.py
+├── programs/demo.asm
+├── programs/test_all.asm
+├── tb_cpu_all.v
 └── README.md
 ```
 
-시뮬레이션 실행 시 생성되는 `*_sim` 바이너리는 로컬 빌드 산출물입니다.
+Gowin 프로젝트(별도 경로 예): `HAEUN16_9K/` — `.gprj`, `impl/pnr/*.fs`  
+시뮬 산출물: `*_sim` (git 제외 권장)
+
+---
+
+## 개발 규칙 (적용 내용)
+
+1. 모듈별 개별 `.v` 파일  
+2. 모듈마다 독립 `tb_*.v`  
+3. 주석 포함 (콘솔 메시지는 영문 — 인코딩 깨짐 방지)  
+4. Verilog-2001, 합성 가능 RTL  
+5. 단계별 검증 후 통합  
 
 ---
 
 ## 아키텍처 요약
 
 ```
-┌─────────┐     ┌──────────────┐     ┌─────┐
-│ PC      │────▶│ RAM (64KW)   │◀───▶│ CPU │
-└─────────┘     └──────────────┘     │     │
-                                     │ R0~R3
-                                     │ ALU │
-                                     └─────┘
+┌─────────┐     ┌──────────────┐     ┌─────────────┐
+│ PC      │────▶│ ram_fpga     │◀───▶│ cpu         │
+└─────────┘     │ 256×16bit    │     │ R0~R3, ALU  │
+                └──────────────┘     └─────────────┘
 ```
 
-- **명령어 길이:** 16 bit  
-- **레지스터:** R0, R1, R2, R3 (각 16 bit)  
 - **명령:** NOP, LOAD, STORE, ADD, SUB, AND, OR, XOR, JMP  
-- **실행:** Fetch1 → Fetch2 → Execute (STORE는 추가 메모리 사이클)
-
-자세한 인코딩·동작은 [ISA.md](ISA.md)를 참고하세요.
-
----
-
-## 사전 요구 사항
-
-- [Icarus Verilog](https://bleyer.org/icarus/) (Windows 설치 시 **Add to PATH** 권장)
-- 설치 확인:
-
-```powershell
-iverilog -V
-vvp -V
-```
-
-PATH가 안 잡히면 전체 경로 사용 (예: `C:\iverilog\bin\iverilog.exe`).
+- **사이클:** Fetch1 → Fetch2 → Execute (STORE +1)  
+- 상세: [ISA.md](ISA.md)
 
 ---
 
-## 시뮬레이션 방법
-
-작업 디렉터리:
+## 시뮬레이션 (Icarus Verilog)
 
 ```powershell
 cd path\to\CPUmaking\HAEUN16
+iverilog -V
 ```
 
-### 모듈 단위 테스트
+### 모듈 단위
 
-| 단계 | 컴파일 | 실행 |
-|------|--------|------|
-| 1 가산기 | `iverilog -o tb_adder16_sim adder16.v tb_adder16.v` | `vvp tb_adder16_sim` |
-| 2 레지스터 | `iverilog -o tb_register16_sim register16.v tb_register16.v` | `vvp tb_register16_sim` |
-| 3 ALU | `iverilog -o tb_alu_sim alu.v tb_alu.v` | `vvp tb_alu_sim` |
-| 4 PC | `iverilog -o tb_pc_sim pc.v tb_pc.v` | `vvp tb_pc_sim` |
-| 5 RAM | `iverilog -o tb_ram_sim ram.v tb_ram.v` | `vvp tb_ram_sim` |
+| 단계 | 실행 |
+|------|------|
+| 1~5 | `iverilog -o tb_*_sim <모듈>.v tb_*.v` → `vvp tb_*_sim` |
 
-성공 시 콘솔에 `*** ALL TESTS PASS ***` 가 출력됩니다.
-
-### CPU 통합 테스트 (8단계)
+### CPU 통합
 
 ```powershell
-iverilog -o tb_cpu_sim cpu.v alu.v pc.v ram.v register16.v tb_cpu.v
+iverilog -o tb_cpu_sim cpu.v alu.v pc.v ram_fpga.v register16.v tb_cpu.v
 vvp tb_cpu_sim
 ```
 
-**프로그램 (RAM 0~2):**
+### 전 opcode 테스트
 
-| 주소 | 명령 | 기계어 |
-|------|------|--------|
-| 0 | LOAD R0, 5 | `0x1005` |
-| 1 | LOAD R1, 3 | `0x1403` |
-| 2 | ADD R0, R1 | `0x3100` |
+```powershell
+python tools\asm.py programs\test_all.asm
+iverilog -o tb_cpu_all_sim cpu.v alu.v pc.v ram_fpga.v register16.v tb_cpu_all.v
+vvp tb_cpu_all_sim
+```
 
-**기대 결과:** R0 = 8, R1 = 3
+→ `*** ALL OPCODE TESTS PASS ***` (NOP, LOAD, ADD, SUB, AND, OR, XOR, STORE, JMP)  
+상세: [programs/TEST_ALL.md](programs/TEST_ALL.md)
 
----
+| 주소 | 명령 | Hex |
+|------|------|-----|
+| 0 | LOAD R0, 5 | `1005` |
+| 1 | LOAD R1, 3 | `1403` |
+| 2 | ADD R0, R1 | `3100` |
 
-## 단계별 완료 현황
+**기대:** R0=8, R1=3, `*** ALL TESTS PASS ***`
 
-| 단계 | 산출물 | 설명 |
-|------|--------|------|
-| 1 | `adder16.v` | 16비트 가산기 |
-| 2 | `register16.v` | 동기 레지스터 |
-| 3 | `alu.v` | ADD/SUB/AND/OR/XOR, ZERO |
-| 4 | `pc.v` | PC +1 / jump / reset |
-| 5 | `ram.v` | 65536 word RAM |
-| 6 | `ISA.md` | 명령어 형식 정의 |
-| 7 | `cpu.v` | CPU 통합 |
-| 8 | `tb_cpu.v` | 통합 시뮬레이션 |
+### 어셈블러 (선택)
 
-**계획된 1~8단계는 모두 완료되었습니다.**
+```powershell
+python tools\asm.py programs\demo.asm
+```
 
 ---
 
-## 향후 확장 아이디어 (선택)
+## FPGA — Tang Nano 9K
 
-본 README 범위 밖의 후속 작업 예시:
+### 툴·디바이스
 
-- **FPGA:** Vivado / Quartus에 RTL 합성, 제약·타이밍 검증
-- **I/O:** VGA, PS/2 키보드용 메모리 맵 I/O · 추가 opcode
-- **소프트웨어:** 어셈블러, 간단한 모니터/OS
-- **성능:** 파이프라인, Harvard 구조(명령/데이터 메모리 분리)
-- **도구:** GTKWave 파형, CI에서 `iverilog` 자동 실행
+| 항목 | 값 |
+|------|-----|
+| 툴 | **GOWIN EDA** (Education, 라이선스 불필요) |
+| 보드 | Sipeed **Tang Nano 9K** |
+| FPGA | **GW1NR-LV9QN88PC6/I5** (QN88P, Version C) |
+| 클럭 | 27 MHz (pin 52) |
+
+**주의:** `GW1N-9` + LQ144 는 **다른 칩** — 반드시 **GW1NR-9 + QN88**.
+
+### Gowin 프로젝트에 넣을 파일
+
+```
+top_tangnano9k.v   (Top)
+cpu.v, alu.v, pc.v, register16.v, ram_fpga.v
+tangnano9k.cst
+```
+
+**넣지 않음:** `tb_*.v`, `ram.v`
+
+### 빌드 (USB 불필요)
+
+1. Top: `top_tangnano9k`  
+2. **Configuration → Use DONE as regular IO** 체크  
+3. **Synthesize** → **Place & Route**  
+4. 산출: `impl/pnr/top_tangnano9k.fs`
+
+자세한 절차: [fpga/GOWIN_PROJECT.md](fpga/GOWIN_PROJECT.md)
+
+### 프로그램 로딩
+
+| 환경 | 방법 |
+|------|------|
+| 시뮬 | `tb_cpu` → `uut.u_ram.memory[...]` 또는 `ram_fpga` initial |
+| FPGA | `ram_fpga.v` **initial** / `program.mi` |
+
+### 보드 도착 후 (최종 완성)
+
+→ [BOARD_QUICKSTART.md](BOARD_QUICKSTART.md)
+
+1. USB → **Program Device** → `top_tangnano9k.fs`  
+2. **S1** 버튼 눌렀다 떼기  
+3. **LED 6개 ON** → 프로젝트 완료  
+
+빠른 체크리스트: [COMPLETION.md](COMPLETION.md)
+
+---
+
+## RAM 용량 (9K)
+
+| 모듈 | 크기 | 용도 |
+|------|------|------|
+| `ram.v` | 65536×16 (1024 Kbit) | 시뮬 only — 9K BSRAM(468K) 초과 |
+| `ram_fpga.v` | 256×16 (4 Kbit) | CPU + FPGA |
+
+---
+
+## 향후 확장 (선택)
+
+- UART 디버그 (FPGA pin 17/18)  
+- PSRAM으로 RAM 확장  
+- VGA, 키보드, OS, 파이프라인  
+
+---
+
+## 문서 인덱스
+
+| 문서 | 설명 |
+|------|------|
+| [ISA.md](ISA.md) | 명령어 집 |
+| [FPGA_RTL_REVIEW.md](FPGA_RTL_REVIEW.md) | FPGA RTL 검토 |
+| [fpga/GOWIN_PROJECT.md](fpga/GOWIN_PROJECT.md) | Gowin IDE 설정 |
+| [COMPLETION.md](COMPLETION.md) | 빠른 완성 로드맵 |
+| [BOARD_QUICKSTART.md](BOARD_QUICKSTART.md) | 보드 10분 |
 
 ---
 
 ## 라이선스
 
-교육/개인 프로젝트용. 상업 사용 시 각 컴포넌트 라이선스를 별도 확인하세요.
+교육/개인 프로젝트용.
 
 ---
 
 ## 참고
 
-- 명령어 상세: [ISA.md](ISA.md)
 - CPU 이름: **HAEUN-16**
+- Icarus: [bleyer.org/icarus](https://bleyer.org/icarus/)
+- Tang Nano 9K: [Sipeed Wiki](https://wiki.sipeed.com/hardware/en/tang/Tang-Nano-9K/Nano-9K.html)

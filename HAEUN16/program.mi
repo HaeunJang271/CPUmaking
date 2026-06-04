@@ -1,0 +1,10 @@
+# Gowin BRAM initialization file (hex, 16-bit words)
+# HAEUN-16 test program @ address 0..2
+# LOAD R0,5 | LOAD R1,3 | ADD R0,R1  ->  R0=8
+#
+# Gowin IDE: RAM/BSRAM IP -> Initialization File -> select this file
+# Or match values in ram_fpga.v initial block
+
+1005
+1403
+3100

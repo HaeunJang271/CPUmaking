@@ -42,14 +42,14 @@ module tb_cpu;
     always #5 clk = ~clk;
 
     // -------------------------------------------------------------------------
-    // RAM에 테스트 프로그램 로드 (ISA.md 기계어)
+    // RAM 프로그램 확인 (ram_fpga initial 과 동일; 필요 시 덮어쓰기)
     // -------------------------------------------------------------------------
     task load_program;
         begin
             uut.u_ram.memory[0] = 16'h1005;   // LOAD R0, 5
             uut.u_ram.memory[1] = 16'h1403;   // LOAD R1, 3
             uut.u_ram.memory[2] = 16'h3100;   // ADD  R0, R1
-            $display("[INFO] Program loaded into RAM:");
+            $display("[INFO] Program in RAM (ram_fpga / tb):");
             $display("       [0] 0x1005  LOAD R0, 5");
             $display("       [1] 0x1403  LOAD R1, 3");
             $display("       [2] 0x3100  ADD  R0, R1");

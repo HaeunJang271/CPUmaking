@@ -164,7 +164,8 @@ module cpu (
     assign mem_addr  = (state == ST_STORE) ? {8'b0, imm8} : pc_out;
     assign mem_we    = (state == ST_STORE);
 
-    ram u_ram (
+    // FPGA: ram_fpga (256 word). 시뮬용 대용량 ram.v 는 별도 유지.
+    ram_fpga u_ram (
         .clk          (clk),
         .write_enable (mem_we),
         .address      (mem_addr),
