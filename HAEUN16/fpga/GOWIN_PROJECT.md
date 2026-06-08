@@ -21,14 +21,26 @@
 
 ```
 top_tangnano9k.v
-cpu.v
+cpu.v             ; ISA v2 + io_out_* 포트 (top과 쌍으로 맞출 것)
 alu.v
 pc.v
 register16.v
 ram_fpga.v
+uart_tx.v
 tangnano9k.cst
 tangnano9k.sdc    ; 27MHz 클럭 (TA1132 경고 제거)
 ```
+
+### 소스 동기화 (EX3990 `io_out_strobe` 등)
+
+Gowin `src\` 는 repo와 **별도 복사본**입니다. `top`만 갱신하고 `cpu.v`가 구버전이면 합성 오류가 납니다.
+
+```powershell
+cd path\to\CPUmaking\HAEUN16
+powershell -File tools\sync_gowin.ps1
+```
+
+Gowin IDE: **Process → Reload All** → **Synthesize**
 
 **포함하지 않음:**
 
@@ -47,9 +59,11 @@ adder16.v      (cpu 내부에서 미사용)
 
 ### WARN TA1132 (`sys_clk` was determined to be a clock but was not created)
 
-- **원인:** `sys_clk` 핀은 `.cst`에만 있고, **타이밍 클럭 정의(.sdc)** 가 없음  
-- **해결:** `tangnano9k.sdc` 를 프로젝트에 추가 후 **Synthesize → Place & Route** 다시 실행  
-- **치명적 오류 아님** — 비트스트림은 나올 수 있으나, 클럭 제약 넣는 것이 좋음
+- **원인:** `tangnano9k.sdc` 가 **프로젝트 FileList에 없음** (`src\`에만 두면 PnR이 무시함)
+- **해결 (IDE):** Project → **Add File** → `src/tangnano9k.sdc`
+- **해결 (자동):** `powershell -File tools\sync_gowin.ps1` (`.gprj` 등록 포함)
+- **내용:** `create_clock -name sys_clk -period 37.037 [get_ports {sys_clk}]` (27 MHz)
+- **치명적 오류 아님** — 비트스트림은 나올 수 있으나, 추가 후 **Syn + PnR** 재실행 권장
 
 ---
 

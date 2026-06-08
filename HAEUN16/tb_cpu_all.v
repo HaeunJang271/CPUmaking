@@ -22,13 +22,17 @@ module tb_cpu_all;
     integer fail_count;
 
     cpu uut (
-        .clk    (clk),
-        .reset  (reset),
-        .r0     (r0),
-        .r1     (r1),
-        .r2     (r2),
-        .r3     (r3),
-        .pc_out (pc_out)
+        .clk           (clk),
+        .reset         (reset),
+        .r0            (r0),
+        .r1            (r1),
+        .r2            (r2),
+        .r3            (r3),
+        .pc_out        (pc_out),
+        .io_out_strobe (),
+        .io_out_port   (),
+        .io_out_data   (),
+        .io_in_data    (8'h00)
     );
 
     initial clk = 0;
@@ -39,6 +43,8 @@ module tb_cpu_all;
         integer k;
         reg [15:0] prog [0:19];
         begin
+            for (k = 0; k < 256; k = k + 1)
+                uut.u_ram.memory[k] = 16'h0000;
             prog[0]  = 16'h0000;
             prog[1]  = 16'h100A;
             prog[2]  = 16'h1403;

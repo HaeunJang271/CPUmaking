@@ -2,31 +2,42 @@
 // cpu.v - HAEUN-16 16비트 CPU (통합)
 // ============================================================================
 // 구성: ALU, PC, 레지스터 파일(R0~R3), RAM, 명령 디코더, 제어 유닛
-// 실행 흐름: Fetch1 -> Fetch2 -> Execute/Writeback (STORE는 추가 사이클)
-// ISA: ISA.md 참조
+// 실행 흐름: Fetch1 -> Fetch2 -> Execute/Writeback (STORE/CALL/RET 추가 사이클)
+// ISA: ISA.md (v1 + v2: JZ, CALL, RET, OUT, IN)
 // 합성: Verilog-2001
 // ============================================================================
 
 module cpu (
-    input  wire        clk,       // 시스템 클럭
-    input  wire        reset,     // 동기 리셋
-    output wire [15:0] r0,        // 레지스터 R0 (디버그/테스트용)
-    output wire [15:0] r1,        // 레지스터 R1
-    output wire [15:0] r2,        // 레지스터 R2
-    output wire [15:0] r3,        // 레지스터 R3
-    output wire [15:0] pc_out     // 현재 PC
+    input  wire        clk,           // 시스템 클럭
+    input  wire        reset,         // 동기 리셋
+    output wire [15:0] r0,            // 레지스터 R0 (디버그/테스트용)
+    output wire [15:0] r1,            // 레지스터 R1
+    output wire [15:0] r2,            // 레지스터 R2
+    output wire [15:0] r3,            // 레지스터 R3
+    output wire [15:0] pc_out,        // 현재 PC
+    output wire        io_out_strobe, // OUT 명령 1사이클 펄스
+    output wire [7:0]  io_out_port,   // OUT 포트 번호 (0 = UART TX)
+    output wire [7:0]  io_out_data,   // OUT 데이터 (하위 8비트)
+    input  wire [7:0]  io_in_data     // IN 포트 데이터 (시뮬/FPGA)
 );
 
     // -------------------------------------------------------------------------
-    // FSM 상태 (동기 RAM 읽기 2사이클 Fetch)
+    // FSM 상태
     // -------------------------------------------------------------------------
-    localparam [1:0] ST_FETCH1 = 2'd0;  // PC 주소로 RAM 읽기 시작
-    localparam [1:0] ST_FETCH2 = 2'd1;  // 읽은 명령어를 ir에 래치
-    localparam [1:0] ST_EXEC   = 2'd2;  // Decode / Execute / Writeback
-    localparam [1:0] ST_STORE  = 2'd3;  // STORE RAM 쓰기
+    localparam [2:0] ST_FETCH1 = 3'd0;
+    localparam [2:0] ST_FETCH2 = 3'd1;
+    localparam [2:0] ST_EXEC   = 3'd2;
+    localparam [2:0] ST_STORE  = 3'd3;
+    localparam [2:0] ST_CALL   = 3'd4;
+    localparam [2:0] ST_RET    = 3'd5;
+    localparam [2:0] ST_RET2   = 3'd6;
+    localparam [2:0] ST_RET3   = 3'd7;
 
-    reg [1:0] state;
-    reg [15:0] ir;                    // 명령어 레지스터
+    reg [2:0] state;
+    reg [15:0] ir;
+
+    // CALL/RET 스택 포인터 (word 주소, 255=비어있음)
+    reg [7:0] sp;
 
     // -------------------------------------------------------------------------
     // 명령어 필드 (Decode)
@@ -45,20 +56,23 @@ module cpu (
     wire is_or    = (opcode == 4'b0110);
     wire is_xor   = (opcode == 4'b0111);
     wire is_jmp   = (opcode == 4'b1000);
+    wire is_jz    = (opcode == 4'b1001);
+    wire is_call  = (opcode == 4'b1010);
+    wire is_ret   = (opcode == 4'b1011);
+    wire is_out   = (opcode == 4'b1100);
+    wire is_in    = (opcode == 4'b1101);
 
     wire is_alu = is_add | is_sub | is_and | is_or | is_xor;
-    // Writeback은 Execute 사이클에서만 수행
-    wire reg_write = (state == ST_EXEC) && (is_load | is_alu);
+    wire reg_write = (state == ST_EXEC) && (is_load | is_alu | is_in);
 
-    // ALU_OP 매핑 (opcode 0011~0111 -> ALU 000~100)
     reg [2:0] alu_op;
     always @(*) begin
         case (opcode)
-            4'b0011: alu_op = 3'b000; // ADD
-            4'b0100: alu_op = 3'b001; // SUB
-            4'b0101: alu_op = 3'b010; // AND
-            4'b0110: alu_op = 3'b011; // OR
-            4'b0111: alu_op = 3'b100; // XOR
+            4'b0011: alu_op = 3'b000;
+            4'b0100: alu_op = 3'b001;
+            4'b0101: alu_op = 3'b010;
+            4'b0110: alu_op = 3'b011;
+            4'b0111: alu_op = 3'b100;
             default: alu_op = 3'b000;
         endcase
     end
@@ -100,23 +114,21 @@ module cpu (
     assign r2 = rf_out[2];
     assign r3 = rf_out[3];
 
-    function [15:0] read_reg;
-        input [1:0] sel;
-        begin
-            case (sel)
-                2'b00: read_reg = rf_out[0];
-                2'b01: read_reg = rf_out[1];
-                2'b10: read_reg = rf_out[2];
-                2'b11: read_reg = rf_out[3];
-                default: read_reg = 16'h0000;
-            endcase
-        end
-    endfunction
+    // 레지스터 읽기 (JZ/CALL 등에서 Rd/Rs 사용)
+    wire [15:0] rs_val = (rs == 2'b00) ? rf_out[0] :
+                         (rs == 2'b01) ? rf_out[1] :
+                         (rs == 2'b10) ? rf_out[2] :
+                         (rs == 2'b11) ? rf_out[3] : 16'h0000;
 
-    wire [15:0] rs_val = read_reg(rs);
-    wire [15:0] rd_val = read_reg(rd);
+    wire [15:0] rd_val = (rd == 2'b00) ? rf_out[0] :
+                         (rd == 2'b01) ? rf_out[1] :
+                         (rd == 2'b10) ? rf_out[2] :
+                         (rd == 2'b11) ? rf_out[3] : 16'h0000;
+    wire        rd_zero = (rd_val == 16'h0000);
 
-    assign wb_data = is_load ? {8'b0, imm8} : alu_result;
+    assign wb_data = is_load ? {8'b0, imm8} :
+                       is_in  ? {8'b0, io_in_data} :
+                                alu_result;
 
     // -------------------------------------------------------------------------
     // ALU
@@ -139,9 +151,15 @@ module cpu (
     wire pc_jump;
     wire [15:0] jump_addr;
 
-    assign pc_enable = (state == ST_EXEC) && !is_jmp;
-    assign pc_jump   = (state == ST_EXEC) && is_jmp;
-    assign jump_addr = {8'b0, imm8};
+    wire jz_take = is_jz && rd_zero;
+
+    assign pc_enable = (state == ST_EXEC) &&
+                       !is_jmp && !jz_take && !is_call && !is_ret;
+    assign pc_jump   = ((state == ST_EXEC) && (is_jmp || jz_take)) ||
+                       (state == ST_CALL) ||
+                       (state == ST_RET3);
+    assign jump_addr = (state == ST_RET3) ? mem_rdata :
+                       {8'b0, imm8};
 
     pc u_pc (
         .clk       (clk),
@@ -160,11 +178,15 @@ module cpu (
     wire [15:0] mem_addr;
     wire        mem_we;
 
-    assign mem_wdata = rs_val;
-    assign mem_addr  = (state == ST_STORE) ? {8'b0, imm8} : pc_out;
-    assign mem_we    = (state == ST_STORE);
+    wire [15:0] ret_addr = pc_out + 16'd1;
 
-    // FPGA: ram_fpga (256 word). 시뮬용 대용량 ram.v 는 별도 유지.
+    assign mem_wdata = (state == ST_CALL) ? ret_addr : rs_val;
+    assign mem_addr  = (state == ST_STORE) ? {8'b0, imm8} :
+                       (state == ST_CALL)  ? {8'b0, sp} :
+                       (state == ST_RET2 || state == ST_RET3) ? {8'b0, sp} :
+                       pc_out;
+    assign mem_we    = (state == ST_STORE) || (state == ST_CALL);
+
     ram_fpga u_ram (
         .clk          (clk),
         .write_enable (mem_we),
@@ -174,37 +196,59 @@ module cpu (
     );
 
     // -------------------------------------------------------------------------
+    // I/O (OUT 명령)
+    // -------------------------------------------------------------------------
+    assign io_out_strobe = (state == ST_EXEC) && is_out;
+    assign io_out_port   = imm8;
+    assign io_out_data   = rs_val[7:0];
+
+    // -------------------------------------------------------------------------
     // 제어 유닛 FSM
     // -------------------------------------------------------------------------
     always @(posedge clk) begin
         if (reset) begin
             state <= ST_FETCH1;
             ir    <= 16'h0000;
+            sp    <= 8'd255;
         end else begin
             case (state)
-                // Fetch1: mem_addr=pc_out, RAM 읽기 1사이클 대기
-                ST_FETCH1: begin
-                    state <= ST_FETCH2;
-                end
+                ST_FETCH1: state <= ST_FETCH2;
 
-                // Fetch2: 명령어 래치 후 실행 단계로
                 ST_FETCH2: begin
                     ir    <= mem_rdata;
                     state <= ST_EXEC;
                 end
 
-                // Execute: 레지스터 쓰기(PC 갱신은 pc 모듈이 처리)
                 ST_EXEC: begin
                     if (is_store)
                         state <= ST_STORE;
+                    else if (is_call)
+                        state <= ST_CALL;
+                    else if (is_ret)
+                        state <= ST_RET;
                     else
                         state <= ST_FETCH1;
                 end
 
-                // Store: RAM[imm8] <- Rs
-                ST_STORE: begin
+                ST_STORE: state <= ST_FETCH1;
+
+                // CALL: RAM[sp] <- PC+1, sp--, PC <- imm8
+                ST_CALL: begin
+                    if (sp != 8'd0)
+                        sp <= sp - 8'd1;
                     state <= ST_FETCH1;
                 end
+
+                // RET: sp++, RAM[sp] 읽어 PC 복귀 (2사이클 read)
+                ST_RET: begin
+                    if (sp != 8'd255)
+                        sp <= sp + 8'd1;
+                    state <= ST_RET2;
+                end
+
+                ST_RET2: state <= ST_RET3;
+
+                ST_RET3: state <= ST_FETCH1;
 
                 default: state <= ST_FETCH1;
             endcase

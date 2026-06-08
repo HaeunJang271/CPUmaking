@@ -53,8 +53,13 @@ HAEUN-16은 **16비트 고정 길이 명령어**를 사용하는 단순 RISC 스
 | `0110` | OR | R-type | `Rd ← Rd \| Rs` |
 | `0111` | XOR | R-type | `Rd ← Rd ^ Rs` |
 | `1000` | JMP | J-type | `PC ← imm8` (절대 주소, word 단위) |
+| `1001` | JZ | J-type | `Rd == 0` 이면 `PC ← imm8`, 아니면 `PC+1` |
+| `1010` | CALL | J-type | `RAM[sp] ← PC+1`, `sp--`, `PC ← imm8` |
+| `1011` | RET | — | `sp++`, `PC ← RAM[sp]` |
+| `1100` | OUT | I/O | `IO[port] ← Rs[7:0]` (port 0 = UART TX) |
+| `1101` | IN | I/O | `Rd ← IO[port]` (상위 8비트 0) |
 
-`1001` ~ `1111` : 예약 (미정의, CPU에서는 NOP 처리 권장)
+`1110` ~ `1111` : 예약
 
 ---
 
@@ -179,6 +184,55 @@ HAEUN-16은 **16비트 고정 길이 명령어**를 사용하는 단순 RISC 스
 |--------|---------|
 | NOP, LOAD, ADD, … | `PC + 1` |
 | JMP | `PC ← imm8` |
+| JZ | `Rd==0` 분기 |
+| CALL / RET | RAM 스택 (`sp`, 초기 255) |
+| OUT / IN | 포트 I/O (FPGA: port 0 → UART) |
+
+### 4.6 JZ (v2)
+
+```
+15 12 | 11 10 |  7 ... 0
++------+-------+----------+
+| 1001 |  Rd   |   imm8   |
++------+-------+----------+
+```
+
+- `Rd != 0` → `PC+1`
+- `Rd == 0` → `PC ← imm8`
+
+### 4.7 CALL / RET (v2)
+
+**CALL**
+
+```
+15 12 |  7 ... 0
++------+----------+
+| 1010 |   imm8   |
++------+----------+
+```
+
+- `RAM[sp] ← PC+1`, `sp ← sp-1`, `PC ← imm8`
+- 스택: word 주소 255 downward
+
+**RET**
+
+```
+15 12  11 0
++------+-----+
+| 1011 |  0  |
++------+-----+
+```
+
+- `sp ← sp+1`, `PC ← RAM[sp]`
+
+### 4.8 OUT / IN (v2)
+
+**OUT** `OUT Rs, port` — `1100 | 00 | Rs | port8`  
+**IN** `IN Rd, port` — `1101 | Rd | 00 | port8`
+
+| port | 장치 |
+|------|------|
+| `0` | UART TX (115200 8N1, Tang Nano 9K pin 17) |
 
 ---
 
@@ -220,7 +274,8 @@ RAM 초기화 시 주소 0~2에 위 값을 순서대로 로드한다.
 
 - **즉값 범위**: 8비트 (`0~255`). 큰 상수는 여러 LOAD/ADD로 구성.
 - **STORE 주소**: 8비트 → 프로그램/데이터를 저주소 영역에 배치 (통합 테스트용).
-- **예약 opcode**: 향후 `CALL`, `BEQ`, I/O(VGA/키보드) 등 확장용.
+- **스택 깊이**: 256 word RAM 상단 (`sp` 255→0). 중첩 CALL 주의.
+- **예약 opcode**: `1110`~`1111` (VGA 등 향후).
 - **메모리 맵**: 추후 ISA v2에서 RAM/IO 디코딩 추가 가능.
 
 ---
@@ -231,7 +286,7 @@ RAM 초기화 시 주소 0~2에 위 값을 순서대로 로드한다.
 |------|-----|
 | 명령어 길이 | 16 bit |
 | 레지스터 | R0~R3 (각 16 bit) |
-| Opcode | 4 bit (9개 정의 + 7개 예약) |
-| 지원 명령 | NOP, LOAD, STORE, ADD, SUB, AND, OR, XOR, JMP |
+| Opcode | 4 bit (14개 정의 + 2개 예약) |
+| 지원 명령 | NOP, LOAD, STORE, ADD, SUB, AND, OR, XOR, JMP, JZ, CALL, RET, OUT, IN |
 
-이 문서는 **6단계** 산출물이며, **7단계 `cpu.v`** 구현 시 본 ISA를 기준으로 디코더·제어 신호를 설계한다.
+**ISA v2** (JZ/CALL/RET/OUT/IN)는 `cpu.v`, `tb_cpu_v2.v`, `programs/test_v2.asm`에서 검증됨.

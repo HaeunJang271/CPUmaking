@@ -8,7 +8,7 @@
 
 - [x] Gowin: Synthesize + Place & Route 성공
 - [x] `impl/pnr/top_tangnano9k.fs` 파일 존재
-- [ ] `top_tangnano9k.v` **done LED** 버전으로 **한 번 더 PnR** (아래 0단계)
+- [ ] `uart_tx.v` 추가 + `top_tangnano9k.v` / `cst` 갱신 후 **PnR** (아래 0단계)
 
 ---
 
@@ -19,7 +19,7 @@
 1. **Synthesize** → **Place & Route**
 2. 새 `.fs` 생성 확인
 
-**PASS 표시:** 보드에서 **LED 6개가 모두 켜지면** 성공 (active-low).
+**PASS 표시:** LED 6개 ON + (선택) UART `HAEUN-16 Boot` 출력.
 
 ---
 
@@ -48,7 +48,7 @@ Programmer 실패 시: Sipeed Wiki → Tang Programmer 교체.
 
 | 결과 | 의미 |
 |------|------|
-| LED 6개 ON | R0=8, R1=3 — CPU + 프로그램 OK |
+| LED 6개 ON | R1=1 — boot 펌웨어 완료 (UART 메시지도 확인) |
 | LED 일부만 / 안 켜짐 | 리셋 다시 / 재다운로드 / PnR 재실행 |
 
 ---
@@ -71,4 +71,27 @@ Programmer 실패 시: Sipeed Wiki → Tang Programmer 교체.
 [하드웨어]  LED 6개 ON after reset      <- 보드 10분
 ```
 
-이후 확장(UART, VGA 등)은 **선택**.
+---
+
+## 4단계: UART 부트 확인 (선택, pin 17)
+
+비트스트림을 **boot + UART** 버전으로 다시 PnR 한 경우:
+
+1. 시리얼 터미널 **115200 8N1** (Tera Term, PuTTY, `python -m serial.tools.miniterm`)
+2. Tang Nano 9K **pin 17 (TX)** → USB-UART **RX** (3.3V)
+3. **S1** 리셋
+4. 터미널 출력:
+
+```text
+HAEUN-16 Boot
+> 
+```
+
+5. **LED 6개 ON** = R1=1 (부트 완료)
+
+Gowin 소스 추가: `uart_tx.v`  
+상세: [programs/BOOT.md](programs/BOOT.md)
+
+---
+
+이후 확장(VGA, SD 등)은 **선택**.

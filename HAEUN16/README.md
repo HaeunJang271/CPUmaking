@@ -1,8 +1,8 @@
 # HAEUN-16
 
 Verilog-2001로 설계한 **16비트 CPU** 프로젝트입니다.  
-모듈별 테스트벤치·ISA·통합 시뮬레이션·**전 opcode 검증**, **Tang Nano 9K** FPGA 비트스트림까지 완료했습니다.  
-**남은 한 단계:** 보드에 다운로드 후 LED로 동작 확인.
+모듈별 테스트벤치·ISA v1/v2·통합 시뮬·**UART 부트 펌웨어**·**Tang Nano 9K** FPGA RTL까지 완료했습니다.  
+**남은 단계:** 보드 Program → LED / UART 확인.
 
 ---
 
@@ -11,11 +11,12 @@ Verilog-2001로 설계한 **16비트 CPU** 프로젝트입니다.
 | 구분 | 상태 |
 |------|------|
 | CPU RTL (1~8단계) | 완료 |
-| 시뮬 (`tb_cpu`, `tb_cpu_all`) | PASS |
-| FPGA RTL (`ram_fpga`, `top`, `cst`, `sdc`) | 완료 |
-| Gowin Synthesize + Place & Route | 완료 |
-| 비트스트림 `.fs` | 생성됨 (`HAEUN16_9K/impl/pnr/`) |
-| **보드 실기 확인** | **대기** — Program Device → LED 6개 ON |
+| 시뮬 (`tb_cpu`, `tb_cpu_all`, `tb_cpu_v2`) | PASS |
+| ISA v2 (JZ/CALL/RET/OUT/IN) | 완료 |
+| UART + `boot.asm` | RTL + 시뮬 완료 |
+| FPGA RTL (`ram_fpga`, `top`, `uart_tx`, `cst`, `sdc`) | 완료 |
+| Gowin Synthesize + Place & Route | 이전 빌드 완료 (UART 추가 후 **재PnR 필요**) |
+| **보드 실기 확인** | **대기** — LED / UART |
 
 ```text
 CPU + 시뮬 + Gowin PnR    ████████████████████  100% (소프트웨어)
@@ -32,12 +33,14 @@ CPU + 시뮬 + Gowin PnR    █████████████████�
 | Verilog RTL 작성 | 완료 |
 | 시뮬레이션 검증 | 완료 (Icarus Verilog) |
 | 전 opcode 테스트 | 완료 (`tb_cpu_all` PASS) |
-| ISA 문서 | 완료 (`ISA.md`) |
+| ISA 문서 | 완료 (`ISA.md` v1+v2) |
+| 어셈블러 (라벨) | 완료 (`tools/asm.py`) |
+| UART 부트 펌웨어 | 완료 (`programs/boot.asm`) |
 | FPGA 이식 RTL | 완료 |
 | Gowin 합성·Place & Route | 완료 (`GW1NR-LV9QN88PC6/I5`) |
 | 타이밍 제약 (TA1132) | 완료 (`tangnano9k.sdc`) |
 | FPGA 보드 실기 동작 | **대기** |
-| VGA / 키보드 / OS | 향후 과제 |
+| VGA / 파일시스템 / OS | 향후 과제 |
 
 ### CPU를 만들었나? / FPGA에서 돌아가나?
 
@@ -56,7 +59,7 @@ CPU + 시뮬 + Gowin PnR    █████████████████�
 1. USB 연결 → Gowin **Program Device**
 2. `top_tangnano9k.fs` 다운로드
 3. **S1** 버튼 눌렀다 떼기
-4. **LED 6개 전부 켜짐** → demo 프로그램 성공 (R0=8, R1=3)
+4. **LED 6개 ON** + 시리얼 **115200** → `HAEUN-16 Boot` / `> ` (boot 펌웨어, R1=1)
 
 보드 없으면: `.fs`만 보관해 두면 됩니다. 추가 Gowin 작업 불필요.
 
@@ -81,8 +84,10 @@ CPU + 시뮬 + Gowin PnR    █████████████████�
 
 | 항목 | 파일 | 내용 |
 |------|------|------|
-| 전 opcode | `programs/test_all.asm`, `tb_cpu_all.v` | NOP~JMP 전부 PASS |
-| 어셈블러 | `tools/asm.py` | `.asm` → hex / `.mi` |
+| 전 opcode v1 | `programs/test_all.asm`, `tb_cpu_all.v` | NOP~JMP PASS |
+| ISA v2 | `programs/test_v2.asm`, `tb_cpu_v2.v` | JZ/CALL/RET/OUT PASS |
+| 어셈블러 | `tools/asm.py` | 라벨 2-pass, `.mi`, `--verilog` |
+| 부트 | `programs/boot.asm`, `programs/BOOT.md` | UART 문자열 출력 |
 
 ### FPGA (Tang Nano 9K)
 
@@ -91,7 +96,8 @@ CPU + 시뮬 + Gowin PnR    █████████████████�
 | 준비 | Gowin EDA (Education) | 라이선스 불필요 |
 | 검토 | [FPGA_RTL_REVIEW.md](FPGA_RTL_REVIEW.md) | RTL FPGA 관점 검토 |
 | RAM | `ram_fpga.v`, `cpu.v` | 256×16 word (9K BSRAM) |
-| Top | `top_tangnano9k.v` | done LED, 27MHz, 리셋 |
+| Top | `top_tangnano9k.v` | UART TX + LED, 27MHz |
+| UART | `uart_tx.v` | 115200 8N1, pin 17 |
 | 제약 | `tangnano9k.cst`, `tangnano9k.sdc` | 핀 + 27MHz 클럭 |
 | 빌드 | `HAEUN16_9K` Gowin 프로젝트 | Syn + PnR 완료 |
 | 문서 | [GOWIN_PROJECT.md](fpga/GOWIN_PROJECT.md), [COMPLETION.md](COMPLETION.md) | IDE·완성 가이드 |
@@ -99,8 +105,8 @@ CPU + 시뮬 + Gowin PnR    █████████████████�
 ### 보드 LED (top)
 
 ```verilog
-wire done = (r0 == 16'd8) && (r1 == 16'd3);
-assign led = done ? 6'b000000 : ~r0[5:0];   // PASS 시 LED 6개 ON (active-low)
+wire done = (r1 == 16'd1);   // boot.asm 완료 마커
+assign led = done ? 6'b000000 : ~r0[5:0];
 ```
 
 ---
@@ -113,11 +119,12 @@ HAEUN16/
 ├── ram.v                  # 65536 word (시뮬 전용)
 ├── ram_fpga.v             # 256 word (CPU/FPGA)
 ├── cpu.v
-├── top_tangnano9k.v       # Tang Nano 9K top (done LED)
+├── top_tangnano9k.v       # Tang Nano 9K top (UART + LED)
+├── uart_tx.v              # UART 송신 115200
 ├── tangnano9k.cst         # 핀 제약
 ├── tangnano9k.sdc         # 27MHz create_clock (TA1132)
 ├── program.mi             # demo BRAM init
-├── tb_*.v, tb_cpu_all.v
+├── tb_*.v, tb_cpu_all.v, tb_cpu_v2.v
 ├── ISA.md
 ├── FPGA_RTL_REVIEW.md
 ├── COMPLETION.md
@@ -126,7 +133,8 @@ HAEUN16/
 ├── tools/asm.py
 ├── programs/
 │   ├── demo.asm
-│   ├── test_all.asm
+│   ├── test_all.asm, test_v2.asm
+│   ├── boot.asm, BOOT.md
 │   └── TEST_ALL.md
 └── README.md
 ```
@@ -155,7 +163,7 @@ HAEUN16/
                 └──────────────┘     └─────────────┘
 ```
 
-- **명령:** NOP, LOAD, STORE, ADD, SUB, AND, OR, XOR, JMP  
+- **명령:** NOP, LOAD, STORE, ADD, SUB, AND, OR, XOR, JMP, **JZ, CALL, RET, OUT, IN**  
 - **사이클:** Fetch1 → Fetch2 → Execute (STORE +1)  
 - 상세: [ISA.md](ISA.md)
 
@@ -190,6 +198,22 @@ vvp tb_cpu_all_sim
 
 → `*** ALL OPCODE TESTS PASS ***` — [programs/TEST_ALL.md](programs/TEST_ALL.md)
 
+### ISA v2 + UART
+
+```powershell
+python tools\asm.py programs\test_v2.asm
+iverilog -o tb_cpu_v2_sim cpu.v alu.v pc.v ram_fpga.v register16.v uart_tx.v tb_cpu_v2.v
+vvp tb_cpu_v2_sim
+```
+
+→ `*** ISA v2 TESTS PASS ***`
+
+### 부트 펌웨어 asm
+
+```powershell
+python tools\asm.py programs\boot.asm
+```
+
 ### 모듈 단위 (1~5단계)
 
 `iverilog -o tb_<name>_sim <mod>.v tb_<name>.v` → `vvp tb_<name>_sim`
@@ -212,8 +236,8 @@ vvp tb_cpu_all_sim
 ### Gowin 프로젝트 파일
 
 ```
-top_tangnano9k.v    (Top, done LED 버전)
-cpu.v, alu.v, pc.v, register16.v, ram_fpga.v
+top_tangnano9k.v    (Top, UART + LED)
+cpu.v, alu.v, pc.v, register16.v, ram_fpga.v, uart_tx.v
 tangnano9k.cst
 tangnano9k.sdc
 ```
@@ -240,7 +264,7 @@ tangnano9k.sdc
 
 | 용도 | 방법 |
 |------|------|
-| 보드 demo | `ram_fpga.v` initial / `program.mi` |
+| 보드 boot | `ram_fpga.v` initial / `programs/boot.mi` |
 | 시뮬 | `tb_cpu.v` 또는 `tb_cpu_all.v` |
 | asm 작성 | `python tools\asm.py programs\demo.asm` |
 
@@ -270,9 +294,9 @@ tangnano9k.sdc
 
 ## 향후 확장 (선택)
 
-- UART 디버그 (pin 17/18)  
+- UART RX (pin 18)  
 - PSRAM RAM 확장  
-- VGA, 키보드, OS, 파이프라인  
+- VGA, SD 카드, OS, 파이프라인  
 
 ---
 

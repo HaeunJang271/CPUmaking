@@ -26,13 +26,17 @@ module tb_cpu;
     integer cycle_count;
 
     cpu uut (
-        .clk    (clk),
-        .reset  (reset),
-        .r0     (r0),
-        .r1     (r1),
-        .r2     (r2),
-        .r3     (r3),
-        .pc_out (pc_out)
+        .clk           (clk),
+        .reset         (reset),
+        .r0            (r0),
+        .r1            (r1),
+        .r2            (r2),
+        .r3            (r3),
+        .pc_out        (pc_out),
+        .io_out_strobe (),
+        .io_out_port   (),
+        .io_out_data   (),
+        .io_in_data    (8'h00)
     );
 
     // -------------------------------------------------------------------------
@@ -45,7 +49,10 @@ module tb_cpu;
     // RAM 프로그램 확인 (ram_fpga initial 과 동일; 필요 시 덮어쓰기)
     // -------------------------------------------------------------------------
     task load_program;
+        integer k;
         begin
+            for (k = 0; k < 256; k = k + 1)
+                uut.u_ram.memory[k] = 16'h0000;
             uut.u_ram.memory[0] = 16'h1005;   // LOAD R0, 5
             uut.u_ram.memory[1] = 16'h1403;   // LOAD R1, 3
             uut.u_ram.memory[2] = 16'h3100;   // ADD  R0, R1
