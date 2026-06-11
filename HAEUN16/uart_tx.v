@@ -5,8 +5,11 @@
 // 합성: Verilog-2001
 // ============================================================================
 
-module uart_tx (
-    input  wire       clk,       // 27MHz
+module uart_tx #(
+    parameter integer CLK_HZ   = 27_000_000,
+    parameter integer BAUDRATE = 115200
+)(
+    input  wire       clk,
     input  wire       reset,     // 동기 리셋 (active-high)
     input  wire [7:0] data_in,
     input  wire       send,      // 1사이클 펄스
@@ -14,8 +17,7 @@ module uart_tx (
     output reg        busy
 );
 
-    // 27_000_000 / 115_200 = 234.375 -> 234
-    localparam integer BAUD_DIV = 234;
+    localparam integer BAUD_DIV = (CLK_HZ + (BAUDRATE / 2)) / BAUDRATE;
 
     reg [15:0] baud_cnt;
     reg [3:0]  bit_idx;

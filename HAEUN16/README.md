@@ -2,7 +2,7 @@
 
 Verilog-2001 기반 **16비트 CPU** 프로젝트.  
 RTL · ISA v1/v2 · 시뮬 · UART 부트 펌웨어 · Tang Nano 9K **FPGA 실기 동작(LED)** 까지 완료.  
-**다음 단계:** UART TX 확인 → UART RX → 모니터 프로그램.
+**다음 단계:** UART TX 터미널 확인 → UART RX → 모니터 프로그램.
 
 ---
 
@@ -17,13 +17,15 @@ RTL · ISA v1/v2 · 시뮬 · UART 부트 펌웨어 · Tang Nano 9K **FPGA 실�
 | FPGA RTL (`top`, `uart_tx`, `cst`, `sdc`) | 완료 |
 | Gowin Syn + PnR → `HAEUN16_9K.fs` | 완료 |
 | **보드 Program + LED 실기** | **완료** ✓ |
-| 보드 UART (`HAEUN-16 Boot`) | 선택 / 다음 |
+| UART TX (`uart_fifo_tx`) | RTL + 시뮬 PASS |
+| 보드 UART 터미널 확인 | **다음** → [UART_TX.md](UART_TX.md) |
 
 ```text
 RTL + 시뮬 + 펌웨어     ████████████████████  100%
 Gowin 빌드              ████████████████████  100%
 보드 Program + LED      ████████████████████  100%  ← 실기 검증 완료
-UART / 모니터           ░░░░░░░░░░░░░░░░░░░░    ~0%
+UART TX (보드)          ██░░░░░░░░░░░░░░░░░░   ~10%
+UART RX / 모니터        ░░░░░░░░░░░░░░░░░░░░    ~0%
 ```
 
 ### 한 줄 답
@@ -55,11 +57,13 @@ assign led = done ? 6'b000000 : ~r0[5:0];
 
 재현 절차: **[BOARD_QUICKSTART.md](BOARD_QUICKSTART.md)**
 
-### UART (선택, 아직이면)
+### UART TX (다음 할 일)
 
-- 시리얼 **115200 8N1**, **pin 17 (TX)** → USB-UART RX
-- 리셋 후 기대: `HAEUN-16 Boot` / `> `
-- 상세: [programs/BOOT.md](programs/BOOT.md)
+→ **[UART_TX.md](UART_TX.md)** — 온보드 USB-UART, 별도 배선 없음
+
+1. `sync_gowin.ps1` → **Syn + PnR** (`uart_fifo_tx.v` 포함)
+2. Program → COM **UART 포트** → **115200 8N1**
+3. 리셋 → `HAEUN-16 Boot` / `> `
 
 ---
 
@@ -100,7 +104,7 @@ HAEUN16/
 ├── cpu.v, alu.v, pc.v, register16.v
 ├── ram.v                  # 65536 word (시뮬 전용)
 ├── ram_fpga.v             # 256 word + boot initial
-├── uart_tx.v              # 115200 8N1
+├── uart_tx.v, uart_fifo_tx.v  # 115200 8N1 + FIFO
 ├── top_tangnano9k.v
 ├── tangnano9k.cst         # 핀 (LED, clk, rst, uart_tx)
 ├── tangnano9k.sdc         # 27 MHz create_clock
@@ -153,6 +157,13 @@ iverilog -o tb_cpu_v2_sim cpu.v alu.v pc.v ram_fpga.v register16.v uart_tx.v tb_
 vvp tb_cpu_v2_sim
 ```
 
+### boot UART (FIFO)
+
+```powershell
+iverilog -o tb_uart_boot_sim cpu.v alu.v pc.v ram_fpga.v register16.v uart_tx.v uart_fifo_tx.v tb_uart_boot.v
+vvp tb_uart_boot_sim
+```
+
 ### 부트 펌웨어
 
 ```powershell
@@ -196,7 +207,7 @@ BOOT:
 
 ```
 top_tangnano9k.v
-cpu.v, alu.v, pc.v, register16.v, ram_fpga.v, uart_tx.v
+cpu.v, alu.v, pc.v, register16.v, ram_fpga.v, uart_tx.v, uart_fifo_tx.v
 tangnano9k.cst
 tangnano9k.sdc      ← FileList에 반드시 등록 (TA1132)
 ```
@@ -278,6 +289,7 @@ Gowin IDE: **Process → Reload All** → **Synthesize** → **Place & Route**
 | 문서 | 설명 |
 |------|------|
 | [ISA.md](ISA.md) | 명령어 집 v1+v2 |
+| [UART_TX.md](UART_TX.md) | PC 터미널 UART TX 확인 |
 | [programs/BOOT.md](programs/BOOT.md) | UART 부트 |
 | [programs/TEST_ALL.md](programs/TEST_ALL.md) | v1 opcode 테스트 |
 | [BOARD_QUICKSTART.md](BOARD_QUICKSTART.md) | 보드 10분 |

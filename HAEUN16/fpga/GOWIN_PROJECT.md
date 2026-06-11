@@ -27,6 +27,7 @@ pc.v
 register16.v
 ram_fpga.v
 uart_tx.v
+uart_fifo_tx.v
 tangnano9k.cst
 tangnano9k.sdc    ; 27MHz 클럭 (TA1132 경고 제거)
 ```
@@ -100,6 +101,8 @@ adder16.v      (cpu 내부에서 미사용)
 
 | 증상 | 확인 |
 |------|------|
+| `CT1135` Can't find `sys_clk` / `led` | Top이 **`uart_fifo_tx` 등 서브모듈**로 잘못 지정됨 → Hierarchy에서 **`top_tangnano9k`** 우클릭 → **Set as Top Module** |
+| `EX0101` Current top is `uart_fifo_tx` | 위와 동일 |
 | Programmer 인식 안 됨 | Sipeed Wiki Programmer 교체 안내 |
 | 합성 실패 (메모리) | `ram_fpga.v` 사용 여부, `ram.v` 제외 |
 | LED 안 변함 | 리셋 버튼 눌렀다 떼기, `led` active-low 이해 |

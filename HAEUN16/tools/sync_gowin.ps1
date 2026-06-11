@@ -14,7 +14,14 @@ $Files = @(
     "register16.v",
     "ram_fpga.v",
     "uart_tx.v",
+    "uart_rx.v",
+    "uart_fifo_tx.v",
+    "uart_fifo_rx.v",
+    "uart_path_bl702.v",
+    "bl702_boot_delay.v",
+    "uart_msg_tx.v",
     "top_tangnano9k.v",
+    "top_uart_smoke.v",
     "tangnano9k.cst",
     "tangnano9k.sdc"
 )
@@ -34,15 +41,29 @@ foreach ($f in $Files) {
     Write-Host "Copied $f"
 }
 
-# .gprj 에 tangnano9k.sdc 가 없으면 TA1132 경고 발생
+# .gprj 에 누락 파일 자동 등록 (Hierarchy에 top이 안 뜨면 대부분 여기 문제)
 $Gprj = Join-Path (Split-Path $GowinSrc -Parent) "HAEUN16_9K.gprj"
+$GprjAdds = @(
+    @{ Path = "src/tangnano9k.sdc";       Type = "file.sdc" },
+    @{ Path = "src/uart_fifo_tx.v";       Type = "file.verilog" },
+    @{ Path = "src/uart_rx.v";            Type = "file.verilog" },
+    @{ Path = "src/uart_fifo_rx.v";       Type = "file.verilog" },
+    @{ Path = "src/uart_path_bl702.v";    Type = "file.verilog" },
+    @{ Path = "src/bl702_boot_delay.v";   Type = "file.verilog" },
+    @{ Path = "src/uart_msg_tx.v";        Type = "file.verilog" },
+    @{ Path = "src/top_uart_smoke.v";     Type = "file.verilog" }
+)
 if (Test-Path $Gprj) {
     $xml = Get-Content $Gprj -Raw
-    if ($xml -notmatch 'tangnano9k\.sdc') {
-        $xml = $xml -replace '(<File path="src/tangnano9k\.cst" type="file\.cst" enable="1"/>)', "`$1`n        <File path=`"src/tangnano9k.sdc`" type=`"file.sdc`" enable=`"1`"/>"
-        Set-Content -Path $Gprj -Value $xml -NoNewline
-        Write-Host "Added tangnano9k.sdc to HAEUN16_9K.gprj"
+    foreach ($entry in $GprjAdds) {
+        $escaped = [regex]::Escape($entry.Path)
+        if ($xml -notmatch $escaped) {
+            $line = "        <File path=`"$($entry.Path)`" type=`"$($entry.Type)`" enable=`"1`"/>`n"
+            $xml = $xml -replace '(</FileList>)', "$line`$1"
+            Write-Host "Added $($entry.Path) to HAEUN16_9K.gprj"
+        }
     }
+    Set-Content -Path $Gprj -Value $xml -NoNewline
 }
 
 Write-Host "Done. Gowin IDE: Process -> Reload All -> Synthesize -> Place & Route"

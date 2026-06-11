@@ -18,6 +18,8 @@ module cpu (
     output wire        io_out_strobe, // OUT 명령 1사이클 펄스
     output wire [7:0]  io_out_port,   // OUT 포트 번호 (0 = UART TX)
     output wire [7:0]  io_out_data,   // OUT 데이터 (하위 8비트)
+    output wire        io_in_strobe,  // IN 명령 1사이클 펄스
+    output wire [7:0]  io_in_port,    // IN 포트 번호 (0 = UART RX)
     input  wire [7:0]  io_in_data     // IN 포트 데이터 (시뮬/FPGA)
 );
 
@@ -201,6 +203,8 @@ module cpu (
     assign io_out_strobe = (state == ST_EXEC) && is_out;
     assign io_out_port   = imm8;
     assign io_out_data   = rs_val[7:0];
+    assign io_in_strobe  = (state == ST_EXEC) && is_in;
+    assign io_in_port    = imm8;
 
     // -------------------------------------------------------------------------
     // 제어 유닛 FSM

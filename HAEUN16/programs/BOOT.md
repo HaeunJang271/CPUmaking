@@ -24,7 +24,9 @@ python tools\asm.py programs\boot.asm --verilog   # ram_fpga initial 스니펫
 
 ## FPGA
 
-1. Gowin 프로젝트에 `uart_tx.v` 추가
-2. `top_tangnano9k.v`, `tangnano9k.cst` (pin 17) 갱신 후 **Syn + PnR**
-3. pin 17 → USB-UART RX (115200 8N1)
-4. 리셋 후 시리얼 터미널에서 부트 메시지 확인
+1. `sync_gowin.ps1` → `uart_tx.v` + **`uart_fifo_tx.v`** 포함
+2. **Syn + PnR** → Program `HAEUN16_9K.fs`
+3. 온보드 USB-UART COM 포트, **115200 8N1**
+4. 리셋 후 `HAEUN-16 Boot` / `> `
+
+상세: [UART_TX.md](../UART_TX.md)
