@@ -16,6 +16,7 @@ RTL · ISA v2 · 시뮬 · **HAEUN-OS v0.1** (UART + HDMI 셸) · Tang Nano 9K *
 | **HAEUN-OS v0.1** (`programs/os.asm`) | 시뮬 **PASS** · SOC 실기 **PASS** |
 | **HAEUN16_SOC** (CPU + UART + LED + HDMI) | **실기 PASS** |
 | **HDMI Phase 2** — RAM[247+] → 화면 `READY` | **실기 PASS** |
+| **HDMI 부트 로고** — PNG 비트맵 오버레이 (`svo_bitmap_logo`) | RTL 완료 |
 | `HAEUN16_9K` (CPU + LED + UART only) | 완료 |
 | `HAEUN16_HDMI` (컬러바 + 정적 텍스트 only) | 컬러바 실기 PASS |
 
@@ -47,12 +48,13 @@ CPU · UART · LED · HDMI를 **한 비트스트림**으로 통합한 top입니�
 
 | 출력 | 내용 |
 |------|------|
-| **HDMI** | 컬러바 + `HAEUN-OS v0.1` / `READY` / `> ` |
+| **HDMI** | 컬러바 + **비트맵 `HAEUN-OS` 로고** + `v0.1` / `READY` / `> ` |
 | **UART** | `HAEUN-OS v0.1` / `> ` (`READY`는 UART에 **없음** — RAM 전용) |
 | **LED** | 부팅 중 `~r0[5:0]` 패턴 → 완료 후 **6개 ON** (`R1=1`) |
 
 ```text
-HAEUN-OS v0.1
+[ HAEUN-OS ]     ← FPGA 고정 비트맵 로고 (assets/haeun_os_logo.png)
+v0.1
 READY
 
 > 
@@ -64,6 +66,7 @@ READY
 cd path\to\CPUmaking\HAEUN16
 powershell -File tools\sync_soc_gowin.ps1
 python tools\gen_ram_os.py          # sync 스크립트가 자동 호출함
+python tools\gen_bitmap_logo.py     # 로고 PNG 변경 시 (ROM .vh 재생성)
 ```
 
 1. Gowin `Documents\HAEUN16_SOC\HAEUN16_SOC.gprj` 열기
@@ -74,7 +77,7 @@ python tools\gen_ram_os.py          # sync 스크립트가 자동 호출함
 
 > `sync_soc_gowin.ps1`은 `impl/gwsynthesis/` 캐시를 삭제합니다.  
 > `unknown module` (EX3937) 이 나면 **Reload All** 후 재합성.  
-> `screen_from_ram`은 `svo_hdmi_soc.v`의 `` `include `` 로도 포함됩니다.
+> `screen_from_ram` · `svo_bitmap_logo`는 `svo_hdmi_soc.v`의 `` `include `` 로만 포함 — **`.gprj` FileList에 따로 넣지 말 것** (중복·`initial` 오류 방지).
 
 ### SOC 아키텍처
 
@@ -85,7 +88,7 @@ CPU @ 27MHz ── OUT port 0 ──► UART TX/RX
             ── STORE 0x80+ ─► screen_ram (직접 쓰기)
             ── RAM 247+    ─► screen_from_ram (peek → 화면 미러)
 
-PLL ──► 640×480 HDMI (컬러바 + svo_live_text 오버레이)
+PLL ──► 640×480 HDMI (컬러바 + 비트맵 로고 + svo_live_text 오버레이)
 ```
 
 | 모듈 | 역할 |
@@ -95,7 +98,8 @@ PLL ──► 640×480 HDMI (컬러바 + svo_live_text 오버레이)
 | `screen_bridge.v` | 스트림 / STORE / RAM미러 mux |
 | `screen_from_ram.v` | RAM[247+] → screen_ram[14+] 1회 미러 |
 | `screen_io_tx.v` | OUT port 1 스트림 (CR 제외) |
-| `hdmi_colorbars/src/svo_hdmi_soc.v` | 컬러바 + CPU 연동 HDMI top |
+| `hdmi_colorbars/src/svo_hdmi_soc.v` | 컬러바 + 로고 + CPU 연동 HDMI top |
+| `hdmi_colorbars/src/hdmi/svo_bitmap_logo.v` | PNG → 1bpp ROM 오버레이 (Gowin `localparam` ROM) |
 
 ### I/O · 메모리 맵
 
@@ -164,16 +168,19 @@ RX 미동작 시: [BL702_ONBOARD.md](fpga/BL702_ONBOARD.md) usb2uartjtag 펌웨�
 
 부팅 시 (`os.asm`):
 
-1. `SEND` — 배너 `HAEUN-OS v0.1` → UART + HDMI
-2. `STORE_READY` — RAM[247..252] ← `"READY\0"`
-3. `R1=1` — LED 완료 + `screen_from_ram` 미러 트리거
-4. `WAIT_MIRROR` — 미러 FSM 완료 대기
-5. HDMI 빈 줄 2개 + 커서 21 → `> ` 프롬프트
+1. `SEND_UART` — UART에만 전체 `HAEUN-OS v0.1`
+2. `SEND` — `v0.1` → UART + HDMI (로고는 RTL 고정, HDMI에는 버전만)
+3. HDMI 빈 줄 — 로고 높이만큼 `\n` (`LOAD R2, 12` 등, 로고 크기에 맞게 조정)
+4. `STORE_READY` — RAM[247..252] ← `"READY\0"`
+5. `R1=1` — LED 완료 + `screen_from_ram` 미러 트리거
+6. `WAIT_MIRROR` — 미러 FSM 완료 대기
+7. HDMI 빈 줄 2개 + 커서 21 → `> ` 프롬프트
 
 | 파일 | 역할 |
 |------|------|
 | `programs/os.asm` | 셸 + HDMI 부트 |
 | `tools/gen_ram_os.py` | `os.asm` → `ram_fpga.v` initial |
+| `tools/gen_bitmap_logo.py` | `assets/haeun_os_logo.png` → `svo_bitmap_logo_rom.vh` |
 | `tools/asm.py` | 어셈블러 |
 | `tb_os.v` | 부트 + help/version/echo 시뮬 |
 
@@ -238,6 +245,8 @@ powershell -File tools\sync_hdmi_gowin.ps1
 | 메시지 | 원인 | 해결 |
 |--------|------|------|
 | `EX3937` unknown module | stale `.prj` / Reload 안 함 | `sync_*` → **Reload All** → 재합성 |
+| `EX3863` / `EX2656` `initial` in `.vh` | ROM `.vh`를 FileList에 중복 등록 | FileList에서 `svo_bitmap_logo*.vh` 제거, `gen_bitmap_logo.py` 재실행 |
+| `EX3794` duplicate module | `.v` + `` `include `` 이중 등록 | `svo_bitmap_logo.v`는 include만 사용 |
 | `PA2122` DPB WRITE_MODE | 듀얼포트 RAM RBW | `ram_fpga.v` write-through 패턴 (SOC 반영됨) |
 | `EX3990` 포트 불일치 | 구버전 `cpu.v` | sync 후 Reload |
 | `TA1132` sys_clk | `.sdc` 미등록 | `.gprj` FileList 확인 |
@@ -248,6 +257,8 @@ powershell -File tools\sync_hdmi_gowin.ps1
 
 ```text
 HAEUN16/
+├── assets/
+│   └── haeun_os_logo.png      # HDMI 부트 비트맵 로고 원본
 ├── cpu.v, alu.v, pc.v, register16.v
 ├── ram.v                      # 65536 word (시뮬 전용)
 ├── ram_fpga.v                 # 512 word + os.asm initial
@@ -261,10 +272,12 @@ HAEUN16/
 │   └── tangnano9k_soc.cst
 ├── hdmi_colorbars/            # HDMI RTL + HAEUN16_HDMI.gprj
 │   ├── src/svo_hdmi_soc.v
+│   ├── src/hdmi/svo_bitmap_logo.v
 │   └── HDMI_COLORBARS.md
 ├── tools/
 │   ├── asm.py
 │   ├── gen_ram_os.py
+│   ├── gen_bitmap_logo.py
 │   ├── sync_gowin.ps1
 │   ├── sync_hdmi_gowin.ps1
 │   └── sync_soc_gowin.ps1
@@ -361,6 +374,16 @@ OS 갱신: `python tools\gen_ram_os.py` → `sync_soc_gowin.ps1` → Gowin 재�
 | **SOC** | `HAEUN16_SOC`, UART + HDMI 동시 출력 |
 | **Phase 2** | RAM → HDMI `READY` 미러 실기 PASS |
 | **Phase 4** | OS `SEND` → HDMI 터미널 실기 PASS |
+| **부트 로고** | PNG 비트맵 `HAEUN-OS` HDMI 오버레이 |
+
+### HDMI 부트 로고
+
+| 항목 | 설명 |
+|------|------|
+| 원본 | `assets/haeun_os_logo.png` |
+| 생성 | `python tools\gen_bitmap_logo.py` (`--scale 0.75` 기본, `--y0` 상단 여백) |
+| RTL | `svo_bitmap_logo.v` + `svo_bitmap_logo_rom.vh` (`localparam` flat ROM — Gowin `initial` 미사용) |
+| 합성 | **`.gprj`에 로고 파일 등록 금지** — `svo_hdmi_soc.v` `` `include `` 만 |
 
 ---
 
@@ -389,5 +412,6 @@ OS 갱신: `python tools\gen_ram_os.py` → `sync_soc_gowin.ps1` → Gowin 재�
 
 - [Icarus Verilog](https://bleyer.org/icarus/)
 - [Tang Nano 9K Wiki](https://wiki.sipeed.com/hardware/en/tang/Tang-Nano-9K/Nano-9K.html)
+- [Coddy ASCII 아트 생성기](https://coddy.tech/tools/ko/ascii-art-generator) — 텍스트·이미지 → ASCII 아트 (로고·배너 아이디어 참고)
 
 교육/개인 프로젝트.

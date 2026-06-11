@@ -13,6 +13,7 @@
         <File path="src/hdmi/svo_defines.vh" type="file.verilog" enable="1"/>
         <File path="src/hdmi/svo_enc.v" type="file.verilog" enable="1"/>
         <File path="src/hdmi/svo_live_text.v" type="file.verilog" enable="1"/>
+        <File path="src/hdmi/svo_font_8x8.vh" type="file.verilog" enable="1"/>
         <File path="src/hdmi/svo_tcard.v" type="file.verilog" enable="1"/>
         <File path="src/hdmi/svo_tmds.v" type="file.verilog" enable="1"/>
         <File path="src/hdmi/svo_utils.v" type="file.verilog" enable="1"/>

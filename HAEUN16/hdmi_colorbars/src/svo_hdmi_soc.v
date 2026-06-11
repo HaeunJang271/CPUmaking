@@ -40,6 +40,7 @@ module svo_hdmi_soc (
     parameter SVO_BITS_PER_ALPHA   = 0;
 
     localparam [SVO_BITS_PER_PIXEL-1:0] white_pixval = ~0;
+    localparam [SVO_BITS_PER_PIXEL-1:0] logo_pixval  = 24'hD4DCE8;  // 이미지와 비슷한 연회색
 
     wire vdma_tvalid;
     wire vdma_tready;
@@ -55,6 +56,16 @@ module svo_hdmi_soc (
     wire term_out_tready;
     wire [1:0] term_out_tdata;
     wire [0:0] term_out_tuser;
+
+    wire logo_tvalid;
+    wire logo_tready;
+    wire [1:0] logo_tdata;
+    wire [0:0] logo_tuser;
+
+    wire base_tvalid;
+    wire base_tready;
+    wire [SVO_BITS_PER_PIXEL-1:0] base_tdata;
+    wire [0:0] base_tuser;
 
     wire video_enc_tvalid;
     wire video_enc_tready;
@@ -124,6 +135,33 @@ module svo_hdmi_soc (
         .out_axis_tuser (vdma_tuser)
     );
 
+    svo_bitmap_logo #(`SVO_PASS_PARAMS) u_logo (
+        .oclk            (clk_pixel),
+        .resetn          (clk_pixel_resetn),
+        .out_axis_tvalid (logo_tvalid),
+        .out_axis_tready (logo_tready),
+        .out_axis_tdata  (logo_tdata),
+        .out_axis_tuser  (logo_tuser)
+    );
+
+    svo_overlay #(`SVO_PASS_PARAMS) u_logo_ov (
+        .clk             (clk_pixel),
+        .resetn          (clk_pixel_resetn),
+        .enable          (1'b1),
+        .in_axis_tvalid  (vdma_tvalid),
+        .in_axis_tready  (vdma_tready),
+        .in_axis_tdata   (vdma_tdata),
+        .in_axis_tuser   (vdma_tuser),
+        .over_axis_tvalid(logo_tvalid),
+        .over_axis_tready(logo_tready),
+        .over_axis_tdata (logo_pixval),
+        .over_axis_tuser ({logo_tdata == 2'b10, logo_tuser}),
+        .out_axis_tvalid (base_tvalid),
+        .out_axis_tready (base_tready),
+        .out_axis_tdata  (base_tdata),
+        .out_axis_tuser  (base_tuser)
+    );
+
     svo_live_text #(`SVO_PASS_PARAMS) u_term (
         .oclk            (clk_pixel),
         .resetn          (clk_pixel_resetn),
@@ -140,10 +178,10 @@ module svo_hdmi_soc (
         .clk             (clk_pixel),
         .resetn          (clk_pixel_resetn),
         .enable          (1'b1),
-        .in_axis_tvalid  (vdma_tvalid),
-        .in_axis_tready  (vdma_tready),
-        .in_axis_tdata   (vdma_tdata),
-        .in_axis_tuser   (vdma_tuser),
+        .in_axis_tvalid  (base_tvalid),
+        .in_axis_tready  (base_tready),
+        .in_axis_tdata   (base_tdata),
+        .in_axis_tuser   (base_tuser),
         .over_axis_tvalid(term_out_tvalid),
         .over_axis_tready(term_out_tready),
         .over_axis_tdata (white_pixval),
@@ -209,4 +247,5 @@ module svo_hdmi_soc (
 endmodule
 
 // 합성 .prj 캐시에 누락돼도 svo_hdmi_soc 와 함께 파싱됨 (Reload All 불필요)
+`include "hdmi/svo_bitmap_logo.v"
 `include "screen_from_ram.v"

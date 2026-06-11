@@ -14,6 +14,14 @@ SEND:
     OUT R0, 1
     RET
 
+SEND_UART:
+    OUT R0, 0
+    RET
+
+SEND_HDMI:
+    OUT R0, 1
+    RET
+
 RECV:
     IN R0, 0
     JZ R0, RECV
@@ -72,25 +80,27 @@ WM_D:
     RET
 
 ; --- boot -------------------------------------------------------------------
+; HDMI: RTL /|\ ASCII "HAEUN-OS" 로고 + 아래 일반 "v0.1"
+; UART: 전체 "HAEUN-OS v0.1"
 BOOT:
     LOAD R0, 72
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 65
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 69
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 85
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 78
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 45
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 79
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 83
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 32
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 118
     CALL SEND
     LOAD R0, 48
@@ -99,6 +109,38 @@ BOOT:
     CALL SEND
     LOAD R0, 49
     CALL SEND
+    CALL SEND_CR
+    ; HDMI: 비트맵 로고(~68px+여백) 아래 + 가운데 v0.1
+    LOAD R2, 12
+BOOT_NL:
+    LOAD R0, 10
+    CALL SEND_HDMI
+    LOAD R3, 1
+    SUB R2, R3
+    JZ R2, BOOT_NL_D
+    JMP BOOT_NL
+BOOT_NL_D:
+    LOAD R1, 0
+BOOT_SP:
+    LOAD R0, 32
+    CALL SEND_HDMI
+    LOAD R2, 1
+    ADD R1, R2
+    LOAD R2, 0
+    ADD R2, R1
+    LOAD R3, 30
+    SUB R2, R3
+    JZ R2, BOOT_VER
+    JMP BOOT_SP
+BOOT_VER:
+    LOAD R0, 118
+    CALL SEND_HDMI
+    LOAD R0, 48
+    CALL SEND_HDMI
+    LOAD R0, 46
+    CALL SEND_HDMI
+    LOAD R0, 49
+    CALL SEND_HDMI
     CALL SEND_CR
     CALL STORE_READY
     LOAD R1, 1
