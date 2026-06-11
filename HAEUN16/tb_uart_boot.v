@@ -24,7 +24,10 @@ module tb_uart_boot;
         .io_out_strobe(io_strobe),
         .io_out_port(io_port),
         .io_out_data(io_data),
-        .io_in_data(8'h00)
+        .io_in_data(8'h00),
+        .io_in_strobe(1'b0), .io_in_port(8'd0),
+        .screen_wr(), .screen_addr(), .screen_data(),
+        .peek_clk(clk), .peek_addr(8'd0), .peek_data()
     );
 
     wire fifo_full;

@@ -35,7 +35,9 @@ module tb_os;
         .io_out_data(io_data),
         .io_in_strobe(io_in_strobe),
         .io_in_port(io_in_port),
-        .io_in_data(io_in_data)
+        .io_in_data(io_in_data),
+        .screen_wr(), .screen_addr(), .screen_data(),
+        .peek_clk(clk), .peek_addr(8'd0), .peek_data()
     );
 
     wire uart_tx;

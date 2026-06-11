@@ -59,7 +59,13 @@ module top_tangnano9k (
         .io_out_data   (io_out_data),
         .io_in_strobe  (io_in_strobe),
         .io_in_port    (io_in_port),
-        .io_in_data    (io_in_data)
+        .io_in_data    (io_in_data),
+        .screen_wr     (),
+        .screen_addr   (),
+        .screen_data   (),
+        .peek_clk      (sys_clk),
+        .peek_addr     (8'd0),
+        .peek_data     ()
     );
 
     wire uart_tx_full;

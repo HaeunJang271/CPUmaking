@@ -1,8 +1,7 @@
 # HAEUN-16
 
 Verilog-2001 기반 **16비트 CPU** 프로젝트.  
-RTL · ISA v2 · 시뮬 · **HAEUN-OS v0.1** (UART 셸) · Tang Nano 9K **FPGA 실기 동작(LED)** 까지 완료.  
-**다음 단계:** 보드 UART에서 셸 확인 (USB-TTL 또는 BL702 펌웨어).
+RTL · ISA v2 · 시뮬 · **HAEUN-OS v0.1** (UART + HDMI 셸) · Tang Nano 9K **LED / UART / HDMI SOC 실기** 까지 완료.
 
 ---
 
@@ -12,20 +11,20 @@ RTL · ISA v2 · 시뮬 · **HAEUN-OS v0.1** (UART 셸) · Tang Nano 9K **FPGA �
 |------|------|
 | CPU 코어 (1~8단계) | 완료 |
 | ISA v2 (JZ / CALL / RET / OUT / IN) | 완료 |
-| 시뮬 (`tb_cpu`, `tb_cpu_all`, `tb_cpu_v2`) | **PASS** |
-| UART TX (`uart_tx`, `uart_fifo_tx`) | RTL + 시뮬 PASS |
-| UART RX (`uart_rx`, `uart_fifo_rx`) | RTL + 시뮬 PASS |
-| **HAEUN-OS v0.1** (`programs/os.asm`) | 시뮬 **PASS** ✓ |
-| FPGA RTL (`top`, `cst`, `sdc`) | 완료 |
-| Gowin Syn + PnR → `HAEUN16_9K.fs` | 완료 |
-| **보드 Program + LED 실기** | **완료** ✓ |
-| 보드 UART 터미널 (셸) | **다음** → [UART_TX.md](UART_TX.md) |
+| 시뮬 (`tb_cpu`, `tb_cpu_all`, `tb_cpu_v2`, `tb_os`) | **PASS** |
+| UART TX/RX + FIFO | RTL + 시뮬 PASS |
+| **HAEUN-OS v0.1** (`programs/os.asm`) | 시뮬 **PASS** · SOC 실기 **PASS** |
+| **HAEUN16_SOC** (CPU + UART + LED + HDMI) | **실기 PASS** |
+| **HDMI Phase 2** — RAM[247+] → 화면 `READY` | **실기 PASS** |
+| `HAEUN16_9K` (CPU + LED + UART only) | 완료 |
+| `HAEUN16_HDMI` (컬러바 + 정적 텍스트 only) | 컬러바 실기 PASS |
 
 ```text
 RTL + 시뮬 + OS         ████████████████████  100%
-Gowin 빌드              ████████████████████  100%
-보드 Program + LED      ████████████████████  100%
-보드 UART 셸            ██░░░░░░░░░░░░░░░░░░   ~10%  ← BL702/TTL 대기
+HAEUN16_SOC (통합)      ████████████████████  100%  ← 권장 비트스트림
+HDMI RAM 미러 (Phase 2) ████████████████████  100%
+HAEUN16_9K (UART only)  ████████████████████  100%
+HAEUN16_HDMI (단독)     ████████████████████  100%
 ```
 
 ### 한 줄 답
@@ -33,43 +32,99 @@ Gowin 빌드              ██████████████████
 | 질문 | 답 |
 |------|-----|
 | CPU 만들었나? | **예** — RTL + 시뮬 PASS |
-| FPGA에서 돌아가나? | **예** — Tang Nano 9K LED 실기 확인 완료 |
-| OS 만들었나? | **예** — HAEUN-OS v0.1, 시뮬 PASS (`tb_os`) |
-| 다음은? | 보드에서 `help` / `echo` / `version` 확인 |
+| FPGA에서 돌아가나? | **예** — `HAEUN16_SOC` Program 기준 |
+| OS 만들었나? | **예** — HAEUN-OS v0.1, UART 셸 + HDMI 동시 출력 |
+| HDMI 됐나? | **예** — 컬러바 + CPU 텍스트 + RAM 미러 `READY` |
+| 어떤 프로젝트 쓰나? | **`HAEUN16_SOC`** (CPU·UART·HDMI 한 번에) |
 
 ---
 
-## 보드 실기 (완료)
+## HAEUN16_SOC (권장)
 
-Tang Nano 9K에서 확인된 동작:
+CPU · UART · LED · HDMI를 **한 비트스트림**으로 통합한 top입니다.
 
-1. `HAEUN16_9K.fs` **Program Device** 성공
-2. **S1** 리셋 후 CPU 부팅
-3. 부팅 중 **LED 패턴 변화(깜빡임)** — `r0` 하위 6비트 표시 (`~r0[5:0]`)
-4. boot 완료 후 **LED 6개 ON** — `R1=1` (`done` 신호)
+### 기대 동작 (실기 확인됨)
 
-```verilog
-// 부팅 중: led = ~r0[5:0]  → 실행에 따라 패턴 변화
-// 완료 후: led = 6'b000000 → 6개 전부 ON (active-low)
-wire done = (r1 == 16'd1);
-assign led = done ? 6'b000000 : ~r0[5:0];
+| 출력 | 내용 |
+|------|------|
+| **HDMI** | 컬러바 + `HAEUN-OS v0.1` / `READY` / `> ` |
+| **UART** | `HAEUN-OS v0.1` / `> ` (`READY`는 UART에 **없음** — RAM 전용) |
+| **LED** | 부팅 중 `~r0[5:0]` 패턴 → 완료 후 **6개 ON** (`R1=1`) |
+
+```text
+HAEUN-OS v0.1
+READY
+
+> 
 ```
 
-재현 절차: **[BOARD_QUICKSTART.md](BOARD_QUICKSTART.md)**
+### 빌드 · Program
 
-### UART / 셸 (다음 할 일)
+```powershell
+cd path\to\CPUmaking\HAEUN16
+powershell -File tools\sync_soc_gowin.ps1
+python tools\gen_ram_os.py          # sync 스크립트가 자동 호출함
+```
 
-→ **[UART_TX.md](UART_TX.md)** — 온보드 BL702 또는 pin 37 USB-TTL
+1. Gowin `Documents\HAEUN16_SOC\HAEUN16_SOC.gprj` 열기
+2. **Project → Reload All** (필수 — 새 `.v` / FileList 갱신)
+3. Top module: **`top_haeun16_soc`**
+4. **Synthesize → Place & Route → Generate Bitstream → Program**
+5. HDMI 케이블 + UART 115200 8N1
 
-1. `powershell -File tools\sync_gowin.ps1` → **Syn + PnR**
-2. Program → COM **UART 포트** → **115200 8N1**
-3. 리셋 → `HAEUN-OS v0.1` / `> ` → `help`, `echo hi`, `version`, `reboot`
+> `sync_soc_gowin.ps1`은 `impl/gwsynthesis/` 캐시를 삭제합니다.  
+> `unknown module` (EX3937) 이 나면 **Reload All** 후 재합성.  
+> `screen_from_ram`은 `svo_hdmi_soc.v`의 `` `include `` 로도 포함됩니다.
+
+### SOC 아키텍처
+
+```text
+CPU @ 27MHz ── OUT port 0 ──► UART TX/RX
+            ── OUT port 1 ──► screen_io_tx ──► screen_ram ──► HDMI 텍스트
+            ── OUT port 2 ──► HDMI 커서 (다음 글자 위치)
+            ── STORE 0x80+ ─► screen_ram (직접 쓰기)
+            ── RAM 247+    ─► screen_from_ram (peek → 화면 미러)
+
+PLL ──► 640×480 HDMI (컬러바 + svo_live_text 오버레이)
+```
+
+| 모듈 | 역할 |
+|------|------|
+| `top_haeun16_soc.v` | CPU + UART + LED + `svo_hdmi_soc` |
+| `screen_ram.v` | 듀얼클럭 텍스트 버퍼 (쓰기=sys_clk, 읽기=pix_clk) |
+| `screen_bridge.v` | 스트림 / STORE / RAM미러 mux |
+| `screen_from_ram.v` | RAM[247+] → screen_ram[14+] 1회 미러 |
+| `screen_io_tx.v` | OUT port 1 스트림 (CR 제외) |
+| `hdmi_colorbars/src/svo_hdmi_soc.v` | 컬러바 + CPU 연동 HDMI top |
+
+### I/O · 메모리 맵
+
+| 대상 | 설명 |
+|------|------|
+| **port 0** | UART TX (`OUT`) / RX (`IN`) |
+| **port 1** | HDMI 문자 스트림 (`SEND` 매크로 = UART + HDMI 동시) |
+| **port 2** | HDMI 커서 — `OUT R0, 2` → `R0[5:0]` = 다음 글자 슬롯 |
+| **RAM 0~246** | 프로그램 · 데이터 |
+| **RAM 247+** | HDMI 미러용 문자열 (`STORE_READY` → `"READY\0"`) |
+| **0x80~0xBF** | `STORE` → `screen_ram` 직접 쓰기 (Phase 3) |
+
+상세: [ISA.md](ISA.md) § I/O map
+
+### HDMI Phase 요약
+
+| Phase | 내용 | 상태 |
+|-------|------|------|
+| 컬러바 | `HAEUN16_HDMI`, SMPTE 패턴 | 실기 PASS |
+| Phase 1 | `screen_status.v` — R0/R1/PC 덤프 (RTL) | SOC 미사용 |
+| Phase 2 | RAM[247+] → HDMI `READY` | **실기 PASS** |
+| Phase 3 | `STORE 0x80+` → 화면 | RTL 완료 |
+| Phase 4 | `OUT port 1` — OS `SEND` → HDMI | **실기 PASS** |
 
 ---
 
 ## HAEUN-OS v0.1
 
-모놀리식 UART 셸 (245 word, `ram_fpga` 256 word 안). **시뮬에서 전 명령 PASS.**
+모놀리식 UART + HDMI 셸 (`programs/os.asm`, ~278 word, `ram_fpga` 512 word).
 
 ```text
 HAEUN-OS v0.1
@@ -87,20 +142,28 @@ v0.1
 |------|------|
 | `help` | 명령 목록 출력 |
 | `version` | `v0.1` 한 줄 출력 |
-| `echo <text>` | 공백 뒤 문자열 에코 (`echo hi` 형식) |
+| `echo <text>` | 공백 뒤 문자열 에코 |
 | `reboot` | 부트 배너부터 재시작 |
+
+부팅 시 (`os.asm`):
+
+1. `SEND` — 배너 `HAEUN-OS v0.1` → UART + HDMI
+2. `STORE_READY` — RAM[247..252] ← `"READY\0"`
+3. `R1=1` — LED 완료 + `screen_from_ram` 미러 트리거
+4. `WAIT_MIRROR` — 미러 FSM 완료 대기
+5. HDMI 빈 줄 2개 + 커서 21 → `> ` 프롬프트
 
 | 파일 | 역할 |
 |------|------|
-| `programs/os.asm` | 셸 소스 |
-| `programs/os.mi` | 어셈블 결과 |
-| `ram_fpga.v` | FPGA RAM initial (`os.asm` 기준) |
-| `tb_os.v` | 부트 + help/version/echo 통합 시뮬 |
-| `tb_os_echo.v` | echo 단독 시뮬 |
+| `programs/os.asm` | 셸 + HDMI 부트 |
+| `tools/gen_ram_os.py` | `os.asm` → `ram_fpga.v` initial |
+| `tools/asm.py` | 어셈블러 |
+| `tb_os.v` | 부트 + help/version/echo 시뮬 |
 
 ```powershell
-python tools\asm.py programs\os.asm
-python tools\asm.py programs\os.asm --verilog   # ram_fpga initial 갱신
+python tools\gen_ram_os.py
+# 또는
+python tools\asm.py programs\os.asm --verilog
 
 iverilog -o tb_os_sim cpu.v alu.v pc.v ram_fpga.v register16.v ^
   uart_tx.v uart_rx.v uart_fifo_tx.v uart_fifo_rx.v tb_os.v
@@ -108,17 +171,99 @@ vvp tb_os_sim
 # 기대: *** HAEUN-OS TEST PASS ***
 ```
 
-이전 부트 펌웨어: `programs/boot.asm` (문자열만 출력, 입력 없음).
+---
+
+## 보드 실기
+
+### LED (`top_tangnano9k` / `top_haeun16_soc` 공통)
+
+| 단계 | LED | 의미 |
+|------|-----|------|
+| 부팅 중 | 패턴 변화 | CPU 실행 (`~r0[5:0]`) |
+| boot 완료 | **6개 ON** | `R1=1` |
+
+### UART
+
+→ **[UART_TX.md](UART_TX.md)** — BL702 온보드 또는 pin 37 USB-TTL, **115200 8N1**
+
+### HDMI (단독 컬러바 테스트)
+
+→ **[hdmi_colorbars/HDMI_COLORBARS.md](hdmi_colorbars/HDMI_COLORBARS.md)**
+
+```powershell
+powershell -File tools\sync_hdmi_gowin.ps1
+# HAEUN16_HDMI.gprj → top_hdmi_colorbars
+```
+
+재현 절차: **[BOARD_QUICKSTART.md](BOARD_QUICKSTART.md)**
 
 ---
 
-## 아키텍처
+## Gowin 프로젝트
 
+| 프로젝트 | Top | 용도 |
+|----------|-----|------|
+| **`HAEUN16_SOC`** | `top_haeun16_soc` | **CPU + UART + LED + HDMI (권장)** |
+| `HAEUN16_9K` | `top_tangnano9k` | CPU + UART + LED only |
+| `HAEUN16_HDMI` | `top_hdmi_colorbars` | HDMI 컬러바 + 정적 텍스트 only |
+
+| 동기화 스크립트 | 대상 |
+|----------------|------|
+| `tools\sync_soc_gowin.ps1` | `HAEUN16_SOC` |
+| `tools\sync_gowin.ps1` | `HAEUN16_9K` |
+| `tools\sync_hdmi_gowin.ps1` | `HAEUN16_HDMI` |
+
+> repo `HAEUN16/` 와 Gowin `Documents\*\src\` 는 **별도 복사본**. RTL 수정 후 해당 sync 스크립트 필수.  
+> 한 번에 **하나의 `.gprj`만** Program.
+
+### 자주 나는 Gowin 메시지
+
+| 메시지 | 원인 | 해결 |
+|--------|------|------|
+| `EX3937` unknown module | stale `.prj` / Reload 안 함 | `sync_*` → **Reload All** → 재합성 |
+| `PA2122` DPB WRITE_MODE | 듀얼포트 RAM RBW | `ram_fpga.v` write-through 패턴 (SOC 반영됨) |
+| `EX3990` 포트 불일치 | 구버전 `cpu.v` | sync 후 Reload |
+| `TA1132` sys_clk | `.sdc` 미등록 | `.gprj` FileList 확인 |
+
+---
+
+## 폴더 구조
+
+```text
+HAEUN16/
+├── cpu.v, alu.v, pc.v, register16.v
+├── ram.v                      # 65536 word (시뮬 전용)
+├── ram_fpga.v                 # 512 word + os.asm initial
+├── uart_*.v, uart_path_bl702.v, bl702_boot_delay.v
+├── top_tangnano9k.v           # HAEUN16_9K
+├── top_haeun16_soc.v          # HAEUN16_SOC
+├── screen_ram.v, screen_bridge.v, screen_from_ram.v
+├── screen_io_tx.v, screen_status.v
+├── soc/
+│   ├── HAEUN16_SOC.gprj
+│   └── tangnano9k_soc.cst
+├── hdmi_colorbars/            # HDMI RTL + HAEUN16_HDMI.gprj
+│   ├── src/svo_hdmi_soc.v
+│   └── HDMI_COLORBARS.md
+├── tools/
+│   ├── asm.py
+│   ├── gen_ram_os.py
+│   ├── sync_gowin.ps1
+│   ├── sync_hdmi_gowin.ps1
+│   └── sync_soc_gowin.ps1
+├── programs/os.asm
+├── tb_os.v, tb_*.v
+└── ISA.md, UART_TX.md, ...
 ```
+
+---
+
+## 아키텍처 (CPU only)
+
+```text
                     ┌─────────────┐
   27MHz ───────────▶│ top         │──▶ LED[5:0]
-                    │             │──▶ uart_tx (pin 17)
-                    │             │◀── uart_rx (pin 18)
+                    │             │──▶ uart_tx / uart_rx
                     └──────┬──────┘
                            │
               ┌────────────┴────────────┐
@@ -127,56 +272,18 @@ vvp tb_os_sim
               └────────────┬──────────┘
                            │
          ┌─────────────────┴─────────────────┐
-         │ ram_fpga 256×16                   │
+         │ ram_fpga 512×16 + peek port       │
          │ os.asm (HAEUN-OS v0.1)            │
          └───────────────────────────────────┘
-         uart_fifo_tx ◀── OUT port 0
-         uart_fifo_rx ──▶ IN  port 0
+         OUT port 0 → UART
+         OUT port 1 → HDMI stream (SOC)
+         OUT port 2 → HDMI cursor (SOC)
 ```
 
 | 항목 | 내용 |
 |------|------|
-| 명령어 | NOP, LOAD, STORE, ADD, SUB, AND, OR, XOR, JMP, **JZ, CALL, RET, OUT, IN** |
-| 사이클 | Fetch1 → Fetch2 → Execute (STORE / CALL / RET 추가 사이클) |
-| 스택 | `sp` 255↓, CALL/RET용 |
-| I/O | `OUT Rs, 0` → UART TX · `IN Rd, 0` → UART RX |
-
-상세: [ISA.md](ISA.md)
-
----
-
-## 폴더 구조
-
-```
-HAEUN16/
-├── cpu.v, alu.v, pc.v, register16.v
-├── ram.v                  # 65536 word (시뮬 전용)
-├── ram_fpga.v             # 256 word + os.asm initial
-├── uart_tx.v, uart_rx.v
-├── uart_fifo_tx.v, uart_fifo_rx.v, uart_path_bl702.v
-├── bl702_boot_delay.v
-├── top_tangnano9k.v
-├── tangnano9k.cst         # 핀 (LED, clk, rst, uart_tx/rx)
-├── tangnano9k_ext_uart.cst  # pin 37 외부 TTL (선택)
-├── tangnano9k.sdc         # 27 MHz create_clock
-├── tb_os.v, tb_os_echo.v, tb_uart_rx.v
-├── tb_*.v, tb_cpu_all.v, tb_cpu_v2.v
-├── ISA.md, BOARD_QUICKSTART.md, COMPLETION.md
-├── fpga/GOWIN_PROJECT.md
-├── tools/
-│   ├── asm.py             # 라벨 2-pass 어셈블러
-│   └── sync_gowin.ps1     # repo → Gowin src 동기화
-└── programs/
-    ├── demo.asm, test_all.asm, test_v2.asm
-    ├── boot.asm, BOOT.md
-    ├── os.asm, os.mi          # HAEUN-OS v0.1
-    └── TEST_ALL.md
-```
-
-**Gowin 프로젝트 (IDE 별도 폴더):**  
-`C:\Gowin\...\Documents\HAEUN16_9K\` — `src\`, `HAEUN16_9K.gprj`, `impl/pnr/*.fs`
-
-> repo `HAEUN16/` 와 Gowin `src\` 는 **별도 복사본**. RTL 수정 후 `sync_gowin.ps1` 필수.
+| 명령어 | NOP, LOAD, STORE, ADD, SUB, AND, OR, XOR, JMP, JZ, CALL, RET, OUT, IN |
+| I/O | port 0 UART · port 1 HDMI stream · port 2 HDMI cursor |
 
 ---
 
@@ -186,158 +293,42 @@ HAEUN16/
 cd path\to\CPUmaking\HAEUN16
 ```
 
-### demo (R0=8) — `tb_cpu.v`가 RAM을 demo로 덮어씀
+### HAEUN-OS (셸)
 
 ```powershell
-iverilog -o tb_cpu_sim cpu.v alu.v pc.v ram_fpga.v register16.v tb_cpu.v
-vvp tb_cpu_sim
-```
-
-### 전 opcode v1
-
-```powershell
-python tools\asm.py programs\test_all.asm
-iverilog -o tb_cpu_all_sim cpu.v alu.v pc.v ram_fpga.v register16.v tb_cpu_all.v
-vvp tb_cpu_all_sim
-```
-
-### ISA v2 + UART
-
-```powershell
-python tools\asm.py programs\test_v2.asm
-iverilog -o tb_cpu_v2_sim cpu.v alu.v pc.v ram_fpga.v register16.v uart_tx.v tb_cpu_v2.v
-vvp tb_cpu_v2_sim
-```
-
-### boot UART (FIFO)
-
-```powershell
-iverilog -o tb_uart_boot_sim cpu.v alu.v pc.v ram_fpga.v register16.v uart_tx.v uart_fifo_tx.v tb_uart_boot.v
-vvp tb_uart_boot_sim
-```
-
-### UART RX
-
-```powershell
-iverilog -o tb_uart_rx_sim uart_rx.v tb_uart_rx.v
-vvp tb_uart_rx_sim
-```
-
-### HAEUN-OS v0.1 (셸)
-
-```powershell
+python tools\gen_ram_os.py
 iverilog -o tb_os_sim cpu.v alu.v pc.v ram_fpga.v register16.v uart_tx.v uart_rx.v uart_fifo_tx.v uart_fifo_rx.v tb_os.v
 vvp tb_os_sim
 ```
 
-### 펌웨어 어셈블
+### demo / opcode / v2 / UART
 
 ```powershell
-python tools\asm.py programs\os.asm
-python tools\asm.py programs\os.asm --verilog   # ram_fpga initial 갱신
-
-python tools\asm.py programs\boot.asm           # 이전 부트 전용 (참고)
-```
-
----
-
-## 어셈블러 (`tools/asm.py`)
-
-- **라벨:** `LOOP:`, `JMP LOOP`, `CALL SEND`
-- **출력:** 콘솔 hex + `programs/*.mi`
-- **옵션:** `--verilog` → `ram_fpga` initial용 `$display` 스니펫
-
-```asm
-SEND:
-    OUT R0, 0
-    RET
-BOOT:
-    LOAD R0, 72      ; 'H'
-    CALL SEND
+iverilog -o tb_cpu_sim cpu.v alu.v pc.v ram_fpga.v register16.v tb_cpu.v
+python tools\asm.py programs\test_all.asm
+iverilog -o tb_cpu_all_sim cpu.v alu.v pc.v ram_fpga.v register16.v tb_cpu_all.v
+python tools\asm.py programs\test_v2.asm
+iverilog -o tb_cpu_v2_sim cpu.v alu.v pc.v ram_fpga.v register16.v uart_tx.v tb_cpu_v2.v
 ```
 
 ---
 
 ## FPGA — Tang Nano 9K
 
-### 툴·디바이스
-
 | 항목 | 값 |
 |------|-----|
-| 툴 | GOWIN EDA (Education) |
-| 보드 | Sipeed Tang Nano 9K |
+| 툴 | GOWIN EDA (Education) 1.9.11 |
 | FPGA | **GW1NR-LV9QN88PC6/I5** (QN88) |
-| 클럭 | 27 MHz |
+| 클럭 | 27 MHz (sys), PLL → 25 MHz pixel (HDMI) |
 
-**주의:** `GW1N-9` + LQ144 ≠ 9K. **GW1NR-9 + QN88**.
-
-### Gowin Design 파일
-
-```
-top_tangnano9k.v
-cpu.v, alu.v, pc.v, register16.v, ram_fpga.v
-uart_tx.v, uart_rx.v, uart_fifo_tx.v, uart_fifo_rx.v
-uart_path_bl702.v, bl702_boot_delay.v
-tangnano9k.cst
-tangnano9k.sdc      ← FileList에 반드시 등록 (TA1132)
-```
-
-**제외:** `tb_*.v`, `ram.v`
-
-### 소스 동기화 (권장)
-
-```powershell
-cd path\to\CPUmaking\HAEUN16
-powershell -File tools\sync_gowin.ps1
-```
-
-- repo RTL → Gowin `src\` 복사
-- `HAEUN16_9K.gprj`에 `tangnano9k.sdc` 없으면 자동 추가
-
-Gowin IDE: **Process → Reload All** → **Synthesize** → **Place & Route**
-
-### 빌드 체크리스트
-
-1. Top: `top_tangnano9k`
-2. `uart_tx.v` 포함
-3. `cpu.v`와 `top` **같은 버전** (IO 포트 일치)
-4. `tangnano9k.sdc`가 Design 트리에 보임
-5. **Use DONE as regular IO** 체크
-6. 산출: `impl/pnr/HAEUN16_9K.fs`
-
-상세: [fpga/GOWIN_PROJECT.md](fpga/GOWIN_PROJECT.md)
-
-### 자주 나는 Gowin 메시지
-
-| 메시지 | 원인 | 해결 |
-|--------|------|------|
-| `EX3990` `io_out_strobe` 없음 | Gowin `cpu.v` 구버전 | `sync_gowin.ps1` 후 Reload |
-| `TA1132` sys_clk not created | `.sdc`가 `.gprj`에 없음 | Add File 또는 `sync_gowin.ps1` |
-
-### 보드 LED (top) — 실기 확인됨
-
-| 단계 | LED | 의미 |
-|------|-----|------|
-| 부팅 중 | 패턴 변화 / 깜빡임 | CPU 실행 중 (`~r0[5:0]`) |
-| boot 완료 | **6개 전부 ON** | `R1=1`, 펌웨어 정상 종료 |
-
-### 프로그램 / RAM
-
-| 용도 | 방법 |
-|------|------|
-| FPGA 기본 | `ram_fpga.v` initial (**os.asm** 245 word) |
-| OS 갱신 | `python tools\asm.py programs\os.asm --verilog` → `ram_fpga.v` 반영 |
-| 이전 boot | `programs/boot.asm` (출력만, 셸 없음) |
-| demo | `python tools\asm.py programs\demo.asm` → initial 갱신 |
-
----
-
-## RAM
+### RAM
 
 | 모듈 | 크기 | 용도 |
 |------|------|------|
 | `ram.v` | 65536×16 | 시뮬 only |
-| `ram_fpga.v` | 256×16 | CPU + FPGA (9K BSRAM) |
+| `ram_fpga.v` | **512×16** | CPU + FPGA (프로그램 ~278 word) |
+
+OS 갱신: `python tools\gen_ram_os.py` → `sync_soc_gowin.ps1` → Gowin 재합성
 
 ---
 
@@ -345,15 +336,14 @@ Gowin IDE: **Process → Reload All** → **Synthesize** → **Place & Route**
 
 | 단계 | 산출물 |
 |------|--------|
-| 1~5 | `adder16`, `register16`, `alu`, `pc`, `ram` + tb |
-| 6~8 | `ISA.md`, `cpu.v`, `tb_cpu.v` |
-| 검증 | `test_all.asm`, `tb_cpu_all.v` |
-| v2 | JZ/CALL/RET/OUT/IN, `test_v2.asm`, `tb_cpu_v2.v` |
-| 펌웨어 | `boot.asm`, `asm.py` 라벨, `uart_tx.v` |
-| FPGA | `top_tangnano9k`, `cst`, `sdc`, Gowin `HAEUN16_9K` |
-| **보드** | Program + LED 깜빡임 → 6개 ON **실기 PASS** |
-| UART RX | `uart_rx.v`, `uart_fifo_rx.v`, top pin 18 |
-| **OS** | `os.asm` HAEUN-OS v0.1, `tb_os` 시뮬 PASS |
+| 1~8 | CPU 코어, ISA, 시뮬 |
+| v2 | JZ/CALL/RET/OUT/IN, UART |
+| OS | HAEUN-OS v0.1, `tb_os` PASS |
+| FPGA | `HAEUN16_9K`, LED 실기 |
+| HDMI | `HAEUN16_HDMI` 컬러바 실기 |
+| **SOC** | `HAEUN16_SOC`, UART + HDMI 동시 출력 |
+| **Phase 2** | RAM → HDMI `READY` 미러 실기 PASS |
+| **Phase 4** | OS `SEND` → HDMI 터미널 실기 PASS |
 
 ---
 
@@ -361,28 +351,20 @@ Gowin IDE: **Process → Reload All** → **Synthesize** → **Place & Route**
 
 | 문서 | 설명 |
 |------|------|
-| [ISA.md](ISA.md) | 명령어 집 v1+v2 |
-| [UART_TX.md](UART_TX.md) | PC 터미널 UART TX 확인 |
-| [programs/BOOT.md](programs/BOOT.md) | UART 부트 |
-| [programs/TEST_ALL.md](programs/TEST_ALL.md) | v1 opcode 테스트 |
+| [ISA.md](ISA.md) | 명령어 · I/O · 화면 메모리 맵 |
+| [UART_TX.md](UART_TX.md) | PC 터미널 UART |
+| [hdmi_colorbars/HDMI_COLORBARS.md](hdmi_colorbars/HDMI_COLORBARS.md) | HDMI 단독 빌드 |
 | [BOARD_QUICKSTART.md](BOARD_QUICKSTART.md) | 보드 10분 |
 | [fpga/GOWIN_PROJECT.md](fpga/GOWIN_PROJECT.md) | Gowin IDE |
-| [COMPLETION.md](COMPLETION.md) | 빠른 완성 |
-| [FPGA_RTL_REVIEW.md](FPGA_RTL_REVIEW.md) | RTL 검토 |
+| [fpga/BL702_ONBOARD.md](fpga/BL702_ONBOARD.md) | 온보드 BL702 |
 
 ---
 
-## 다음 작업 (우선순위)
+## 다음 작업 (선택)
 
-1. **보드 UART** — `HAEUN-OS v0.1` 터미널 확인 ([UART_TX.md](UART_TX.md))
-   - USB-TTL (pin 37) 또는 BL702 `usb2uart` 펌웨어
-2. `sync_gowin.ps1` 후 Syn/PnR/Program (`os.asm` 포함 `ram_fpga.v`)
-3. RAM 확장 / 파일시스템 — 이후
-
-## 향후 (선택)
-
-- PSRAM / SD / VGA
-- 인터럽트, 타이머, 멀티태스킹
+- Phase 3 실기 — `STORE 0x80+` 화면 직접 쓰기 검증
+- README 외 `HDMI_COLORBARS.md` SOC 크로스링크
+- PSRAM / SD / 인터럽트
 
 ---
 

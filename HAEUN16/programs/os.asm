@@ -1,8 +1,8 @@
 ; ============================================================================
-; os.asm - HAEUN-OS v0.1 (UART 셸)
+; os.asm - HAEUN-OS v0.1 (UART + HDMI 셸)
 ; ============================================================================
 ; 명령: help | echo <text> | version | reboot
-; port 0 = UART TX/RX, R1=1 -> LED 부트 완료
+; port 0 = UART, port 1 = HDMI stream, port 2 = HDMI cursor, RAM 247+ = 화면 문자열
 ; ============================================================================
 
     JMP BOOT
@@ -10,6 +10,7 @@
 ; --- I/O primitives ---------------------------------------------------------
 SEND:
     OUT R0, 0
+    OUT R0, 1
     RET
 
 RECV:
@@ -27,6 +28,36 @@ PRINT_PROMPT:
     CALL SEND
     LOAD R0, 32
     CALL SEND
+    RET
+
+; RAM[247..] = "READY\0" -> HDMI 미러 (빈 줄은 스트림으로)
+STORE_READY:
+    LOAD R0, 82
+    STORE R0, 247
+    LOAD R0, 69
+    STORE R0, 248
+    LOAD R0, 65
+    STORE R0, 249
+    LOAD R0, 68
+    STORE R0, 250
+    LOAD R0, 89
+    STORE R0, 251
+    LOAD R0, 0
+    STORE R0, 252
+    RET
+
+WAIT_MIRROR:
+    LOAD R0, 0
+WM_L:
+    LOAD R2, 1
+    ADD R0, R2
+    LOAD R2, 0
+    ADD R2, R0
+    LOAD R3, 500
+    SUB R2, R3
+    JZ R2, WM_D
+    JMP WM_L
+WM_D:
     RET
 
 ; --- boot -------------------------------------------------------------------
@@ -58,7 +89,15 @@ BOOT:
     LOAD R0, 49
     CALL SEND
     CALL SEND_CR
+    CALL STORE_READY
     LOAD R1, 1
+    CALL WAIT_MIRROR
+    LOAD R0, 19
+    OUT R0, 2
+    CALL SEND_CR
+    CALL SEND_CR
+    LOAD R0, 21
+    OUT R0, 2
 
 ; --- shell loop -------------------------------------------------------------
 SHELL:
@@ -254,6 +293,7 @@ DO_ECHO:
     LOAD R0, 0
     ADD R0, R3
     OUT R0, 0
+    OUT R0, 1
     JMP DO_ECHO
 ECHO_DONE:
     CALL SEND_CR

@@ -20,7 +20,14 @@ module cpu (
     output wire [7:0]  io_out_data,   // OUT 데이터 (하위 8비트)
     output wire        io_in_strobe,  // IN 명령 1사이클 펄스
     output wire [7:0]  io_in_port,    // IN 포트 번호 (0 = UART RX)
-    input  wire [7:0]  io_in_data     // IN 포트 데이터 (시뮬/FPGA)
+    input  wire [7:0]  io_in_data,   // IN 포트 데이터 (시뮬/FPGA)
+    // STORE imm8 0x80..0xBF -> HDMI screen_ram (SCREEN0 = 0x80)
+    output wire        screen_wr,
+    output wire [5:0]  screen_addr,
+    output wire [7:0]  screen_data,
+    input  wire        peek_clk,
+    input  wire [7:0]  peek_addr,
+    output wire [15:0] peek_data
 );
 
     // -------------------------------------------------------------------------
@@ -182,19 +189,29 @@ module cpu (
 
     wire [15:0] ret_addr = pc_out + 16'd1;
 
+    wire screen_store = (state == ST_STORE) &&
+                        (imm8 >= 8'h80) && (imm8 <= 8'hBF);
+
     assign mem_wdata = (state == ST_CALL) ? ret_addr : rs_val;
     assign mem_addr  = (state == ST_STORE) ? {8'b0, imm8} :
                        (state == ST_CALL)  ? {8'b0, sp} :
                        (state == ST_RET2 || state == ST_RET3) ? {8'b0, sp} :
                        pc_out;
-    assign mem_we    = (state == ST_STORE) || (state == ST_CALL);
+    assign mem_we    = ((state == ST_STORE) && !screen_store) || (state == ST_CALL);
+
+    assign screen_wr    = screen_store;
+    assign screen_addr  = imm8[5:0];
+    assign screen_data  = rs_val[7:0];
 
     ram_fpga u_ram (
         .clk          (clk),
         .write_enable (mem_we),
         .address      (mem_addr),
         .data_in      (mem_wdata),
-        .data_out     (mem_rdata)
+        .data_out     (mem_rdata),
+        .peek_clk     (peek_clk),
+        .peek_addr    (peek_addr),
+        .peek_data    (peek_data)
     );
 
     // -------------------------------------------------------------------------
