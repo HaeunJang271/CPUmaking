@@ -2,7 +2,8 @@
 # Usage: powershell -File tools\sync_soc_gowin.ps1
 
 param(
-    [string]$GowinRoot = "C:\Gowin\Gowin_V1.9.11.03_Education_x64\IDE\bin\Documents\HAEUN16_SOC"
+    [string]$GowinRoot = "C:\Gowin\Gowin_V1.9.11.03_Education_x64\IDE\bin\Documents\HAEUN16_SOC",
+    [switch]$ExtUart
 )
 
 $Root = Split-Path -Parent $PSScriptRoot
@@ -52,6 +53,13 @@ if ($LASTEXITCODE -ge 8) {
 Write-Host "Synced hdmi_colorbars\src -> $GowinSrc"
 
 Copy-Item -Force (Join-Path $Root "soc\tangnano9k_soc.cst") (Join-Path $GowinSrc "tangnano9k_soc.cst")
+Copy-Item -Force (Join-Path $Root "soc\tangnano9k_soc_ext_uart.cst") (Join-Path $GowinSrc "tangnano9k_soc_ext_uart.cst")
+if ($ExtUart) {
+    Copy-Item -Force (Join-Path $Root "soc\tangnano9k_soc_ext_uart.cst") (Join-Path $GowinSrc "tangnano9k_soc.cst")
+    Write-Host "CST: tangnano9k_soc_ext_uart (pin 37/38) -> tangnano9k_soc.cst"
+} else {
+    Write-Host "CST: tangnano9k_soc (pin 17/18 onboard BL702)"
+}
 
 $GprjDst = Join-Path $GowinRoot "HAEUN16_SOC.gprj"
 Copy-Item -Force $GprjSrc $GprjDst
@@ -89,3 +97,8 @@ Write-Host "  2. Project -> Reload All  (권장; screen_from_ram 은 svo_hdmi_so
 Write-Host "  3. Top module: top_haeun16_soc"
 Write-Host "  4. Synthesize -> Place & Route -> Generate Bitstream -> Program"
 Write-Host "  5. HDMI: HAEUN-OS v0.1 + 프롬프트 >  (UART 병행)"
+if ($ExtUart) {
+    Write-Host ""
+    Write-Host "Ext UART: pin37->동글RX, pin38<-동글TX, GND. PC=동글 COM 115200"
+    Write-Host "Guide: fpga\EXT_UART_KEYBOARD.md"
+}

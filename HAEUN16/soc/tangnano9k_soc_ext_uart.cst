@@ -1,15 +1,15 @@
 // ============================================================================
-// tangnano9k_ext_uart.cst - 외부 USB-TTL용 (온보드 BL702 UART 우회)
+// tangnano9k_soc_ext_uart.cst - SOC + HDMI, 외부 USB-TTL (키보드 RX 포함)
 // ============================================================================
-// Tang Nano 9K: pin 17/18 → BL702 경로가 보드에서 동작 안 하는 경우가 많음
-// (lushaylabs/tangnano9k-series-examples#15)
+// 온보드 BL702 UART가 PC에 COM으로 안 잡히거나 RX가 안 될 때 사용.
 //
 // 배선 (3.3V TTL, GND 공통):
 //   FPGA pin 37 (uart_tx) → USB-TTL RX
-//   FPGA pin 38 (uart_rx) ← USB-TTL TX   ← 키보드 입력
-//   PC: USB-TTL 새 COM 포트, 115200
+//   FPGA pin 38 (uart_rx) ← USB-TTL TX
 //
-// Gowin: 이 파일만 쓰려면 tangnano9k.cst 비활성화 후 이 파일 추가
+// Gowin HAEUN16_SOC:
+//   tangnano9k_soc.cst 비활성 → 이 파일 활성
+//   Syn + PnR + Program → PC는 동글 COM, 115200
 // ============================================================================
 
 IO_LOC "sys_clk" 52;
@@ -36,3 +36,12 @@ IO_PORT "uart_tx" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
 
 IO_LOC "uart_rx" 38;
 IO_PORT "uart_rx" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+IO_LOC "tmds_d_p[0]" 71,70;
+IO_PORT "tmds_d_p[0]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p[1]" 73,72;
+IO_PORT "tmds_d_p[1]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p[2]" 75,74;
+IO_PORT "tmds_d_p[2]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_clk_p" 69,68;
+IO_PORT "tmds_clk_p" PULL_MODE=NONE DRIVE=8;

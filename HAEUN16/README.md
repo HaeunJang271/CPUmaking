@@ -145,6 +145,23 @@ v0.1
 | `echo <text>` | 공백 뒤 문자열 에코 |
 | `reboot` | 부트 배너부터 재시작 |
 
+### 키보드 입력 (UART RX → HDMI 에코)
+
+PC 시리얼 터미널 → pin 18 `uart_rx` → `IN port 0` → **`RECV`가 UART·HDMI 동시 에코**.
+
+| 항목 | 설명 |
+|------|------|
+| 수신 | FIFO 비면 `RECV` 대기 (`JZ` 루프) |
+| 에코 | `SEND` = port 0 + port 1 |
+| Enter | CR(`13`) → LF(`10`) 변환 (HDMI는 CR 미표시) |
+
+```text
+> help          ← 입력 글자가 HDMI에도 표시
+help echo version reboot
+```
+
+RX 미동작 시: [BL702_ONBOARD.md](fpga/BL702_ONBOARD.md) usb2uartjtag 펌웨어 또는 pin 18 USB-TTL.
+
 부팅 시 (`os.asm`):
 
 1. `SEND` — 배너 `HAEUN-OS v0.1` → UART + HDMI

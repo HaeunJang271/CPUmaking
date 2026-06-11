@@ -2,7 +2,8 @@
 ; os.asm - HAEUN-OS v0.1 (UART + HDMI 셸)
 ; ============================================================================
 ; 명령: help | echo <text> | version | reboot
-; port 0 = UART, port 1 = HDMI stream, port 2 = HDMI cursor, RAM 247+ = 화면 문자열
+; port 0 = UART RX/TX, port 1 = HDMI stream, port 2 = HDMI cursor
+; RECV = 키보드(UART) 수신 + UART·HDMI 로컬 에코 (CR→LF)
 ; ============================================================================
 
     JMP BOOT
@@ -16,6 +17,16 @@ SEND:
 RECV:
     IN R0, 0
     JZ R0, RECV
+    LOAD R2, 13
+    LOAD R3, 0
+    ADD R3, R0
+    SUB R3, R2
+    JZ R3, RECV_NL
+    JMP RECV_OUT
+RECV_NL:
+    LOAD R0, 10
+RECV_OUT:
+    CALL SEND
     RET
 
 SEND_CR:
@@ -290,10 +301,6 @@ DO_ECHO:
     ADD R0, R3
     SUB R0, R2
     JZ R0, ECHO_DONE
-    LOAD R0, 0
-    ADD R0, R3
-    OUT R0, 0
-    OUT R0, 1
     JMP DO_ECHO
 ECHO_DONE:
     CALL SEND_CR
