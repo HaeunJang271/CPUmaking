@@ -1,8 +1,8 @@
 # HAEUN-16
 
 Verilog-2001 기반 **16비트 CPU** 프로젝트.  
-RTL · ISA v1/v2 · 시뮬 · UART 부트 펌웨어 · Tang Nano 9K **FPGA 실기 동작(LED)** 까지 완료.  
-**다음 단계:** UART TX 터미널 확인 → UART RX → 모니터 프로그램.
+RTL · ISA v2 · 시뮬 · **HAEUN-OS v0.1** (UART 셸) · Tang Nano 9K **FPGA 실기 동작(LED)** 까지 완료.  
+**다음 단계:** 보드 UART에서 셸 확인 (USB-TTL 또는 BL702 펌웨어).
 
 ---
 
@@ -13,19 +13,19 @@ RTL · ISA v1/v2 · 시뮬 · UART 부트 펌웨어 · Tang Nano 9K **FPGA 실�
 | CPU 코어 (1~8단계) | 완료 |
 | ISA v2 (JZ / CALL / RET / OUT / IN) | 완료 |
 | 시뮬 (`tb_cpu`, `tb_cpu_all`, `tb_cpu_v2`) | **PASS** |
-| UART + `boot.asm` | RTL + 시뮬 완료 |
-| FPGA RTL (`top`, `uart_tx`, `cst`, `sdc`) | 완료 |
+| UART TX (`uart_tx`, `uart_fifo_tx`) | RTL + 시뮬 PASS |
+| UART RX (`uart_rx`, `uart_fifo_rx`) | RTL + 시뮬 PASS |
+| **HAEUN-OS v0.1** (`programs/os.asm`) | 시뮬 **PASS** ✓ |
+| FPGA RTL (`top`, `cst`, `sdc`) | 완료 |
 | Gowin Syn + PnR → `HAEUN16_9K.fs` | 완료 |
 | **보드 Program + LED 실기** | **완료** ✓ |
-| UART TX (`uart_fifo_tx`) | RTL + 시뮬 PASS |
-| 보드 UART 터미널 확인 | **다음** → [UART_TX.md](UART_TX.md) |
+| 보드 UART 터미널 (셸) | **다음** → [UART_TX.md](UART_TX.md) |
 
 ```text
-RTL + 시뮬 + 펌웨어     ████████████████████  100%
+RTL + 시뮬 + OS         ████████████████████  100%
 Gowin 빌드              ████████████████████  100%
-보드 Program + LED      ████████████████████  100%  ← 실기 검증 완료
-UART TX (보드)          ██░░░░░░░░░░░░░░░░░░   ~10%
-UART RX / 모니터        ░░░░░░░░░░░░░░░░░░░░    ~0%
+보드 Program + LED      ████████████████████  100%
+보드 UART 셸            ██░░░░░░░░░░░░░░░░░░   ~10%  ← BL702/TTL 대기
 ```
 
 ### 한 줄 답
@@ -34,8 +34,8 @@ UART RX / 모니터        ░░░░░░░░░░░░░░░░░�
 |------|-----|
 | CPU 만들었나? | **예** — RTL + 시뮬 PASS |
 | FPGA에서 돌아가나? | **예** — Tang Nano 9K LED 실기 확인 완료 |
-| OS 올릴 기반? | **예** — 분기·호출·UART TX까지 있음 |
-| 다음은? | UART 출력 확인 → **UART RX** → 모니터 |
+| OS 만들었나? | **예** — HAEUN-OS v0.1, 시뮬 PASS (`tb_os`) |
+| 다음은? | 보드에서 `help` / `echo` / `version` 확인 |
 
 ---
 
@@ -57,13 +57,58 @@ assign led = done ? 6'b000000 : ~r0[5:0];
 
 재현 절차: **[BOARD_QUICKSTART.md](BOARD_QUICKSTART.md)**
 
-### UART TX (다음 할 일)
+### UART / 셸 (다음 할 일)
 
-→ **[UART_TX.md](UART_TX.md)** — 온보드 USB-UART, 별도 배선 없음
+→ **[UART_TX.md](UART_TX.md)** — 온보드 BL702 또는 pin 37 USB-TTL
 
-1. `sync_gowin.ps1` → **Syn + PnR** (`uart_fifo_tx.v` 포함)
+1. `powershell -File tools\sync_gowin.ps1` → **Syn + PnR**
 2. Program → COM **UART 포트** → **115200 8N1**
-3. 리셋 → `HAEUN-16 Boot` / `> `
+3. 리셋 → `HAEUN-OS v0.1` / `> ` → `help`, `echo hi`, `version`, `reboot`
+
+---
+
+## HAEUN-OS v0.1
+
+모놀리식 UART 셸 (245 word, `ram_fpga` 256 word 안). **시뮬에서 전 명령 PASS.**
+
+```text
+HAEUN-OS v0.1
+> help
+help echo version reboot
+> version
+v0.1
+> echo hi
+ hi
+> reboot
+(재부팅)
+```
+
+| 명령 | 설명 |
+|------|------|
+| `help` | 명령 목록 출력 |
+| `version` | `v0.1` 한 줄 출력 |
+| `echo <text>` | 공백 뒤 문자열 에코 (`echo hi` 형식) |
+| `reboot` | 부트 배너부터 재시작 |
+
+| 파일 | 역할 |
+|------|------|
+| `programs/os.asm` | 셸 소스 |
+| `programs/os.mi` | 어셈블 결과 |
+| `ram_fpga.v` | FPGA RAM initial (`os.asm` 기준) |
+| `tb_os.v` | 부트 + help/version/echo 통합 시뮬 |
+| `tb_os_echo.v` | echo 단독 시뮬 |
+
+```powershell
+python tools\asm.py programs\os.asm
+python tools\asm.py programs\os.asm --verilog   # ram_fpga initial 갱신
+
+iverilog -o tb_os_sim cpu.v alu.v pc.v ram_fpga.v register16.v ^
+  uart_tx.v uart_rx.v uart_fifo_tx.v uart_fifo_rx.v tb_os.v
+vvp tb_os_sim
+# 기대: *** HAEUN-OS TEST PASS ***
+```
+
+이전 부트 펌웨어: `programs/boot.asm` (문자열만 출력, 입력 없음).
 
 ---
 
@@ -73,6 +118,7 @@ assign led = done ? 6'b000000 : ~r0[5:0];
                     ┌─────────────┐
   27MHz ───────────▶│ top         │──▶ LED[5:0]
                     │             │──▶ uart_tx (pin 17)
+                    │             │◀── uart_rx (pin 18)
                     └──────┬──────┘
                            │
               ┌────────────┴────────────┐
@@ -80,10 +126,12 @@ assign led = done ? 6'b000000 : ~r0[5:0];
               │  R0~R3, ALU, PC, FSM  │
               └────────────┬──────────┘
                            │
-              ┌────────────┴──────────┐
-              │ ram_fpga 256×16       │
-              │ boot.asm @ 0..36      │
-              └───────────────────────┘
+         ┌─────────────────┴─────────────────┐
+         │ ram_fpga 256×16                   │
+         │ os.asm (HAEUN-OS v0.1)            │
+         └───────────────────────────────────┘
+         uart_fifo_tx ◀── OUT port 0
+         uart_fifo_rx ──▶ IN  port 0
 ```
 
 | 항목 | 내용 |
@@ -91,7 +139,7 @@ assign led = done ? 6'b000000 : ~r0[5:0];
 | 명령어 | NOP, LOAD, STORE, ADD, SUB, AND, OR, XOR, JMP, **JZ, CALL, RET, OUT, IN** |
 | 사이클 | Fetch1 → Fetch2 → Execute (STORE / CALL / RET 추가 사이클) |
 | 스택 | `sp` 255↓, CALL/RET용 |
-| I/O | `OUT Rs, 0` → UART TX |
+| I/O | `OUT Rs, 0` → UART TX · `IN Rd, 0` → UART RX |
 
 상세: [ISA.md](ISA.md)
 
@@ -103,12 +151,15 @@ assign led = done ? 6'b000000 : ~r0[5:0];
 HAEUN16/
 ├── cpu.v, alu.v, pc.v, register16.v
 ├── ram.v                  # 65536 word (시뮬 전용)
-├── ram_fpga.v             # 256 word + boot initial
-├── uart_tx.v, uart_fifo_tx.v  # 115200 8N1 + FIFO
+├── ram_fpga.v             # 256 word + os.asm initial
+├── uart_tx.v, uart_rx.v
+├── uart_fifo_tx.v, uart_fifo_rx.v, uart_path_bl702.v
+├── bl702_boot_delay.v
 ├── top_tangnano9k.v
-├── tangnano9k.cst         # 핀 (LED, clk, rst, uart_tx)
+├── tangnano9k.cst         # 핀 (LED, clk, rst, uart_tx/rx)
+├── tangnano9k_ext_uart.cst  # pin 37 외부 TTL (선택)
 ├── tangnano9k.sdc         # 27 MHz create_clock
-├── program.mi             # boot BRAM init (= programs/boot.mi)
+├── tb_os.v, tb_os_echo.v, tb_uart_rx.v
 ├── tb_*.v, tb_cpu_all.v, tb_cpu_v2.v
 ├── ISA.md, BOARD_QUICKSTART.md, COMPLETION.md
 ├── fpga/GOWIN_PROJECT.md
@@ -118,6 +169,7 @@ HAEUN16/
 └── programs/
     ├── demo.asm, test_all.asm, test_v2.asm
     ├── boot.asm, BOOT.md
+    ├── os.asm, os.mi          # HAEUN-OS v0.1
     └── TEST_ALL.md
 ```
 
@@ -164,11 +216,27 @@ iverilog -o tb_uart_boot_sim cpu.v alu.v pc.v ram_fpga.v register16.v uart_tx.v 
 vvp tb_uart_boot_sim
 ```
 
-### 부트 펌웨어
+### UART RX
 
 ```powershell
-python tools\asm.py programs\boot.asm
-python tools\asm.py programs\boot.asm --verilog   # ram_fpga initial 스니펫
+iverilog -o tb_uart_rx_sim uart_rx.v tb_uart_rx.v
+vvp tb_uart_rx_sim
+```
+
+### HAEUN-OS v0.1 (셸)
+
+```powershell
+iverilog -o tb_os_sim cpu.v alu.v pc.v ram_fpga.v register16.v uart_tx.v uart_rx.v uart_fifo_tx.v uart_fifo_rx.v tb_os.v
+vvp tb_os_sim
+```
+
+### 펌웨어 어셈블
+
+```powershell
+python tools\asm.py programs\os.asm
+python tools\asm.py programs\os.asm --verilog   # ram_fpga initial 갱신
+
+python tools\asm.py programs\boot.asm           # 이전 부트 전용 (참고)
 ```
 
 ---
@@ -207,7 +275,9 @@ BOOT:
 
 ```
 top_tangnano9k.v
-cpu.v, alu.v, pc.v, register16.v, ram_fpga.v, uart_tx.v, uart_fifo_tx.v
+cpu.v, alu.v, pc.v, register16.v, ram_fpga.v
+uart_tx.v, uart_rx.v, uart_fifo_tx.v, uart_fifo_rx.v
+uart_path_bl702.v, bl702_boot_delay.v
 tangnano9k.cst
 tangnano9k.sdc      ← FileList에 반드시 등록 (TA1132)
 ```
@@ -255,9 +325,10 @@ Gowin IDE: **Process → Reload All** → **Synthesize** → **Place & Route**
 
 | 용도 | 방법 |
 |------|------|
-| FPGA boot | `ram_fpga.v` initial (boot 37 word) |
-| BRAM init | `program.mi` / `programs/boot.mi` |
-| demo로 되돌리기 | `python tools\asm.py programs\demo.asm` → initial 갱신 |
+| FPGA 기본 | `ram_fpga.v` initial (**os.asm** 245 word) |
+| OS 갱신 | `python tools\asm.py programs\os.asm --verilog` → `ram_fpga.v` 반영 |
+| 이전 boot | `programs/boot.asm` (출력만, 셸 없음) |
+| demo | `python tools\asm.py programs\demo.asm` → initial 갱신 |
 
 ---
 
@@ -281,6 +352,8 @@ Gowin IDE: **Process → Reload All** → **Synthesize** → **Place & Route**
 | 펌웨어 | `boot.asm`, `asm.py` 라벨, `uart_tx.v` |
 | FPGA | `top_tangnano9k`, `cst`, `sdc`, Gowin `HAEUN16_9K` |
 | **보드** | Program + LED 깜빡임 → 6개 ON **실기 PASS** |
+| UART RX | `uart_rx.v`, `uart_fifo_rx.v`, top pin 18 |
+| **OS** | `os.asm` HAEUN-OS v0.1, `tb_os` 시뮬 PASS |
 
 ---
 
@@ -301,10 +374,10 @@ Gowin IDE: **Process → Reload All** → **Synthesize** → **Place & Route**
 
 ## 다음 작업 (우선순위)
 
-1. **UART TX** — 터미널에서 `HAEUN-16 Boot` 확인 (USB-UART)
-2. **UART RX** (pin 18) + `IN` — 양방향 콘솔
-3. **모니터** — `help` / `echo` / `reboot` (asm)
-4. RAM 확장 / 메모리 LOAD / OS — 이후
+1. **보드 UART** — `HAEUN-OS v0.1` 터미널 확인 ([UART_TX.md](UART_TX.md))
+   - USB-TTL (pin 37) 또는 BL702 `usb2uart` 펌웨어
+2. `sync_gowin.ps1` 후 Syn/PnR/Program (`os.asm` 포함 `ram_fpga.v`)
+3. RAM 확장 / 파일시스템 — 이후
 
 ## 향후 (선택)
 

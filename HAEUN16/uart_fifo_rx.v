@@ -27,8 +27,6 @@ module uart_fifo_rx #(
     assign empty = (count == 0);
     assign full  = (count == FIFO_DEPTH);
 
-    reg [7:0] data_out;
-
     wire [7:0] uart_byte;
     wire       uart_valid;
 
@@ -43,26 +41,21 @@ module uart_fifo_rx #(
         .rx_valid (uart_valid)
     );
 
-    assign rd_data = data_out;
+    // 조합 읽기: CPU IN(ST_EXEC)과 같은 사이클에 유효 데이터
+    assign rd_data = empty ? 8'h00 : fifo[rd_ptr[ADDR_BITS-1:0]];
 
     always @(posedge clk) begin
         if (reset) begin
-            wr_ptr   <= {ADDR_BITS+1{1'b0}};
-            rd_ptr   <= {ADDR_BITS+1{1'b0}};
-            data_out <= 8'h00;
+            wr_ptr <= {ADDR_BITS+1{1'b0}};
+            rd_ptr <= {ADDR_BITS+1{1'b0}};
         end else begin
             if (uart_valid && !full) begin
                 fifo[wr_ptr[ADDR_BITS-1:0]] <= uart_byte;
                 wr_ptr <= wr_ptr + 1'b1;
             end
 
-            if (rd_en && !empty) begin
-                data_out <= fifo[rd_ptr[ADDR_BITS-1:0]];
-                rd_ptr   <= rd_ptr + 1'b1;
-            end else if (!empty)
-                data_out <= fifo[rd_ptr[ADDR_BITS-1:0]];
-            else
-                data_out <= 8'h00;
+            if (rd_en && !empty)
+                rd_ptr <= rd_ptr + 1'b1;
         end
     end
 

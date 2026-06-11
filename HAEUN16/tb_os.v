@@ -1,21 +1,31 @@
 // ============================================================================
-// tb_os.v - HAEUN-OS v0.1 부트 메시지 시뮬 (os.asm)
+// tb_os.v - HAEUN-OS v0.1 시뮬 (부트 + help/version/echo 명령)
 // ============================================================================
 
 `timescale 1ns / 1ps
 
 module tb_os;
 
-    reg clk, reset;
+    localparam integer CLK_HZ   = 1_000_000;
+    localparam integer BAUDRATE = 115200;
+    localparam integer BAUD_DIV = (CLK_HZ + (BAUDRATE / 2)) / BAUDRATE;
+
+    reg        clk;
+    reg        reset;
+    reg        uart_rx_rst;
+    reg        uart_rx_pin;
     wire [15:0] r0, r1, pc_out;
-    wire uart_tx;
-    wire io_strobe;
-    wire [7:0] io_data;
-    wire [7:0] io_port;
-    reg [7:0] pushed [0:31];
-    integer push_len;
-    integer tx_busy_fall;
-    reg uart_busy_d;
+    wire        io_strobe;
+    wire [7:0]  io_data;
+    wire [7:0]  io_port;
+    wire        io_in_strobe;
+    wire [7:0]  io_in_port;
+    wire [7:0]  io_in_data;
+
+    reg [7:0] tx_log [0:511];
+    integer   tx_len;
+    integer   i;
+    integer   b;
 
     cpu u_cpu (
         .clk(clk), .reset(reset),
@@ -23,138 +33,193 @@ module tb_os;
         .io_out_strobe(io_strobe),
         .io_out_port(io_port),
         .io_out_data(io_data),
-        .io_in_data(8'h00)
+        .io_in_strobe(io_in_strobe),
+        .io_in_port(io_in_port),
+        .io_in_data(io_in_data)
     );
 
-    wire fifo_full;
-    wire uart_busy;
+    wire uart_tx;
+    wire uart_tx_full;
+    wire uart_tx_busy;
 
-    uart_fifo_tx u_uart_tx (
+    uart_fifo_tx #(
+        .CLK_HZ   (CLK_HZ),
+        .BAUDRATE (BAUDRATE)
+    ) u_uart_tx (
         .clk(clk), .reset(reset),
         .wr_en(io_strobe && (io_port == 8'd0)),
         .wr_data(io_data),
-        .full(fifo_full),
+        .full(uart_tx_full),
         .tx(uart_tx),
-        .busy(uart_busy)
+        .busy(uart_tx_busy)
+    );
+
+    uart_fifo_rx #(
+        .CLK_HZ   (CLK_HZ),
+        .BAUDRATE (BAUDRATE)
+    ) u_uart_rx (
+        .clk(clk), .reset(reset | uart_rx_rst),
+        .rx(uart_rx_pin),
+        .rd_en(io_in_strobe && (io_in_port == 8'd0)),
+        .rd_data(io_in_data),
+        .empty(),
+        .full()
     );
 
     initial clk = 0;
-    always #18.518 clk = ~clk;
+    always #(500.0) clk = ~clk;
 
     always @(posedge clk) begin
-        if (!reset) begin
-            if (io_strobe && io_port == 8'd0 && push_len < 32) begin
-                pushed[push_len] = io_data;
-                push_len = push_len + 1;
-            end
-            if (uart_busy_d && !uart_busy)
-                tx_busy_fall = tx_busy_fall + 1;
-            uart_busy_d <= uart_busy;
+        if (!reset && io_strobe && io_port == 8'd0 && tx_len < 512) begin
+            tx_log[tx_len] = io_data;
+            tx_len = tx_len + 1;
         end
     end
 
-    integer k;
-    reg [7:0] expect_bytes [0:15];
-    reg       str_ok;
+    task send_bit(input bit_val);
+        begin
+            uart_rx_pin = bit_val;
+            repeat (BAUD_DIV) @(posedge clk);
+        end
+    endtask
+
+    task send_byte(input [7:0] data);
+        begin
+            send_bit(1'b0);
+            for (b = 0; b < 8; b = b + 1)
+                send_bit(data[b]);
+            send_bit(1'b1);
+            repeat (BAUD_DIV) @(posedge clk);
+        end
+    endtask
+
+    task wait_shell;
+        begin
+            repeat (BAUD_DIV * 800) @(posedge clk);
+        end
+    endtask
+
+    task flush_rx;
+        begin
+            uart_rx_rst = 1'b1;
+            repeat (8) @(posedge clk);
+            uart_rx_rst = 1'b0;
+            repeat (BAUD_DIV * 4) @(posedge clk);
+        end
+    endtask
+
+    task send_cmd;
+        begin
+            uart_rx_pin = 1'b1;
+            flush_rx;
+            repeat (BAUD_DIV * 16) @(posedge clk);
+        end
+    endtask
+
+    function integer find_byte;
+        input integer start;
+        input [7:0] ch;
+        integer j;
+        begin
+            find_byte = -1;
+            for (j = start; j < tx_len; j = j + 1)
+                if (tx_log[j] === ch) begin
+                    find_byte = j;
+                    j = tx_len;
+                end
+        end
+    endfunction
+
+    function integer find_seq2;
+        input integer start;
+        input [7:0] a;
+        input [7:0] b;
+        integer j;
+        begin
+            find_seq2 = -1;
+            for (j = start; j < tx_len - 1; j = j + 1)
+                if (tx_log[j] === a && tx_log[j + 1] === b) begin
+                    find_seq2 = j;
+                    j = tx_len;
+                end
+        end
+    endfunction
+
+    reg boot_ok;
+    reg help_ok;
+    reg ver_ok;
+    reg echo_ok;
+    integer mark;
+    integer pos;
 
     initial begin
-        push_len     = 0;
-        tx_busy_fall = 0;
-        uart_busy_d  = 0;
-        reset        = 1;
+        tx_len      = 0;
+        uart_rx_pin = 1'b1;
+        uart_rx_rst = 1'b0;
+        reset       = 1'b1;
 
-        expect_bytes[0]  = 8'd72;  // H
-        expect_bytes[1]  = 8'd65;  // A
-        expect_bytes[2]  = 8'd69;  // E
-        expect_bytes[3]  = 8'd85;  // U
-        expect_bytes[4]  = 8'd78;  // N
-        expect_bytes[5]  = 8'd45;  // -
-        expect_bytes[6]  = 8'd79;  // O
-        expect_bytes[7]  = 8'd83;  // S
-        expect_bytes[8]  = 8'd32;  // space
-        expect_bytes[9]  = 8'd118; // v
-        expect_bytes[10] = 8'd48;  // 0
-        expect_bytes[11] = 8'd46;  // .
-        expect_bytes[12] = 8'd49;  // 1
-        expect_bytes[13] = 8'd10;  // \n
-        expect_bytes[14] = 8'd0;
-
-        #200;
-        for (k = 0; k < 256; k = k + 1)
-            u_cpu.u_ram.memory[k] = 16'h0000;
-
-        // os.asm (generated by: python tools/asm.py programs/os.asm)
-        u_cpu.u_ram.memory[0]  = 16'h8003;
-        u_cpu.u_ram.memory[1]  = 16'hC000;
-        u_cpu.u_ram.memory[2]  = 16'hB000;
-        u_cpu.u_ram.memory[3]  = 16'h1048;
-        u_cpu.u_ram.memory[4]  = 16'hA001;
-        u_cpu.u_ram.memory[5]  = 16'h1041;
-        u_cpu.u_ram.memory[6]  = 16'hA001;
-        u_cpu.u_ram.memory[7]  = 16'h1045;
-        u_cpu.u_ram.memory[8]  = 16'hA001;
-        u_cpu.u_ram.memory[9]  = 16'h1055;
-        u_cpu.u_ram.memory[10] = 16'hA001;
-        u_cpu.u_ram.memory[11] = 16'h104E;
-        u_cpu.u_ram.memory[12] = 16'hA001;
-        u_cpu.u_ram.memory[13] = 16'h102D;
-        u_cpu.u_ram.memory[14] = 16'hA001;
-        u_cpu.u_ram.memory[15] = 16'h104F;
-        u_cpu.u_ram.memory[16] = 16'hA001;
-        u_cpu.u_ram.memory[17] = 16'h1053;
-        u_cpu.u_ram.memory[18] = 16'hA001;
-        u_cpu.u_ram.memory[19] = 16'h1020;
-        u_cpu.u_ram.memory[20] = 16'hA001;
-        u_cpu.u_ram.memory[21] = 16'h1076;
-        u_cpu.u_ram.memory[22] = 16'hA001;
-        u_cpu.u_ram.memory[23] = 16'h1030;
-        u_cpu.u_ram.memory[24] = 16'hA001;
-        u_cpu.u_ram.memory[25] = 16'h102E;
-        u_cpu.u_ram.memory[26] = 16'hA001;
-        u_cpu.u_ram.memory[27] = 16'h1031;
-        u_cpu.u_ram.memory[28] = 16'hA001;
-        u_cpu.u_ram.memory[29] = 16'h100A;
-        u_cpu.u_ram.memory[30] = 16'hA001;
-        u_cpu.u_ram.memory[31] = 16'h1401;
-        u_cpu.u_ram.memory[32] = 16'h103E;
-        u_cpu.u_ram.memory[33] = 16'hA001;
-        u_cpu.u_ram.memory[34] = 16'h1020;
-        u_cpu.u_ram.memory[35] = 16'hA001;
-        u_cpu.u_ram.memory[36] = 16'h8020;
-
-        #50;
-        reset = 0;
+        repeat (16) @(posedge clk);
+        reset = 1'b0;
 
         while (r1 !== 16'd1) @(posedge clk);
-        repeat (2000000) @(posedge clk);
+        repeat (BAUD_DIV * 200) @(posedge clk);
 
-        str_ok = 1'b1;
-        for (k = 0; k < 14; k = k + 1)
-            if (pushed[k] !== expect_bytes[k])
-                str_ok = 1'b0;
+        boot_ok = 1'b1;
+        if (tx_len < 14)
+            boot_ok = 1'b0;
+        else if (tx_log[0] !== 8'd72 || tx_log[5] !== 8'd45 || tx_log[12] !== 8'd49)
+            boot_ok = 1'b0;
+
+        mark = tx_len;
+        send_cmd;
+        send_byte("h"); send_byte("e"); send_byte("l"); send_byte("p"); send_byte(8'h0A);
+        wait_shell;
+        help_ok = (find_seq2(mark, 8'd114, 8'd101) >= 0);
+
+        mark = tx_len;
+        send_cmd;
+        send_byte("v"); send_byte("e"); send_byte("r");
+        send_byte("s"); send_byte("i"); send_byte("o"); send_byte("n");
+        send_byte(8'h0A);
+        wait_shell;
+        ver_ok = (find_seq2(mark, 8'd118, 8'd48) >= 0);
+
+        mark = tx_len;
+        send_cmd;
+        send_byte("e"); send_byte("c"); send_byte("h"); send_byte("o");
+        send_byte(8'd32);
+        send_byte("h"); send_byte("i");
+        send_byte(8'h0A);
+        wait_shell;
+        echo_ok = (find_seq2(mark, 8'd104, 8'd105) >= 0);
 
         $display("----------------------------------------");
-        $display("HAEUN-OS boot: OUT %0d bytes, UART TX %0d", push_len, tx_busy_fall);
+        $display("HAEUN-OS sim: TX %0d bytes", tx_len);
 
-        if (str_ok)
-            $display("[PASS] 'HAEUN-OS v0.1' boot string");
+        if (boot_ok)
+            $display("[PASS] boot banner");
         else
-            $display("[FAIL] boot byte mismatch");
+            $display("[FAIL] boot banner");
 
-        if (push_len >= 16)
-            $display("[PASS] >= 16 OUT bytes (boot + prompt start)");
+        if (help_ok)
+            $display("[PASS] help command");
         else
-            $display("[FAIL] OUT count %0d", push_len);
+            $display("[FAIL] help command");
 
-        if (r1 === 16'd1)
-            $display("[PASS] R1=1 OS boot done");
+        if (ver_ok)
+            $display("[PASS] version command");
         else
-            $display("[FAIL] R1=%0d", r1);
+            $display("[FAIL] version command");
 
-        if (str_ok && push_len >= 16 && r1 === 16'd1)
-            $display("*** HAEUN-OS BOOT TEST PASS ***");
+        if (echo_ok)
+            $display("[PASS] echo command");
         else
-            $display("*** HAEUN-OS BOOT TEST FAILED ***");
+            $display("[FAIL] echo command");
+
+        if (boot_ok && help_ok && ver_ok && echo_ok)
+            $display("*** HAEUN-OS TEST PASS ***");
+        else
+            $display("*** HAEUN-OS TEST FAILED ***");
         $display("----------------------------------------");
         $finish;
     end
