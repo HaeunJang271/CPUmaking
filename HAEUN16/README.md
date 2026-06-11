@@ -1,8 +1,8 @@
 # HAEUN-16
 
 Verilog-2001 기반 **16비트 CPU** 프로젝트.  
-RTL · ISA v1/v2 · 시뮬 · UART 부트 펌웨어 · Tang Nano 9K FPGA 이식까지 완료.  
-**남은 단계:** 보드에 비트스트림 다운로드 후 LED / UART 확인.
+RTL · ISA v1/v2 · 시뮬 · UART 부트 펌웨어 · Tang Nano 9K **FPGA 실기 동작(LED)** 까지 완료.  
+**다음 단계:** UART TX 확인 → UART RX → 모니터 프로그램.
 
 ---
 
@@ -15,13 +15,15 @@ RTL · ISA v1/v2 · 시뮬 · UART 부트 펌웨어 · Tang Nano 9K FPGA 이식�
 | 시뮬 (`tb_cpu`, `tb_cpu_all`, `tb_cpu_v2`) | **PASS** |
 | UART + `boot.asm` | RTL + 시뮬 완료 |
 | FPGA RTL (`top`, `uart_tx`, `cst`, `sdc`) | 완료 |
-| Gowin Syn + PnR | **UART·sdc 반영 후 재빌드** |
-| 보드 실기 (LED / UART) | **대기** |
+| Gowin Syn + PnR → `HAEUN16_9K.fs` | 완료 |
+| **보드 Program + LED 실기** | **완료** ✓ |
+| 보드 UART (`HAEUN-16 Boot`) | 선택 / 다음 |
 
 ```text
 RTL + 시뮬 + 펌웨어     ████████████████████  100%
-Gowin 빌드 (최신)       ████████████████░░░░   ~80%  ← sync 후 PnR
-보드 Program            ░░░░░░░░░░░░░░░░░░░░    ~0%
+Gowin 빌드              ████████████████████  100%
+보드 Program + LED      ████████████████████  100%  ← 실기 검증 완료
+UART / 모니터           ░░░░░░░░░░░░░░░░░░░░    ~0%
 ```
 
 ### 한 줄 답
@@ -29,22 +31,35 @@ Gowin 빌드 (최신)       ████████████████░�
 | 질문 | 답 |
 |------|-----|
 | CPU 만들었나? | **예** — RTL + 시뮬 PASS |
-| OS 올릴 기반? | **예** — 분기·호출·UART까지 있음 |
-| FPGA 비트스트림? | **예** — 최신 소스로 PnR 후 `.fs` 사용 |
-| 보드에서 확인? | Program → 리셋 → **LED 6개 ON** + UART `HAEUN-16 Boot` |
+| FPGA에서 돌아가나? | **예** — Tang Nano 9K LED 실기 확인 완료 |
+| OS 올릴 기반? | **예** — 분기·호출·UART TX까지 있음 |
+| 다음은? | UART 출력 확인 → **UART RX** → 모니터 |
 
 ---
 
-## 보드 도착 후 (10분)
+## 보드 실기 (완료)
 
-→ **[BOARD_QUICKSTART.md](BOARD_QUICKSTART.md)**
+Tang Nano 9K에서 확인된 동작:
 
-1. (최초 1회) `tools\sync_gowin.ps1` → Gowin **Syn + PnR**
-2. USB → **Program Device** → `top_tangnano9k.fs`
-3. **S1** 리셋
-4. **LED 6개 ON** (R1=1) + 시리얼 **115200 8N1** → `HAEUN-16 Boot` / `> `
+1. `HAEUN16_9K.fs` **Program Device** 성공
+2. **S1** 리셋 후 CPU 부팅
+3. 부팅 중 **LED 패턴 변화(깜빡임)** — `r0` 하위 6비트 표시 (`~r0[5:0]`)
+4. boot 완료 후 **LED 6개 ON** — `R1=1` (`done` 신호)
 
-UART: **pin 17 (TX)** → USB-UART **RX**. 상세: [programs/BOOT.md](programs/BOOT.md)
+```verilog
+// 부팅 중: led = ~r0[5:0]  → 실행에 따라 패턴 변화
+// 완료 후: led = 6'b000000 → 6개 전부 ON (active-low)
+wire done = (r1 == 16'd1);
+assign led = done ? 6'b000000 : ~r0[5:0];
+```
+
+재현 절차: **[BOARD_QUICKSTART.md](BOARD_QUICKSTART.md)**
+
+### UART (선택, 아직이면)
+
+- 시리얼 **115200 8N1**, **pin 17 (TX)** → USB-UART RX
+- 리셋 후 기대: `HAEUN-16 Boot` / `> `
+- 상세: [programs/BOOT.md](programs/BOOT.md)
 
 ---
 
@@ -207,7 +222,7 @@ Gowin IDE: **Process → Reload All** → **Synthesize** → **Place & Route**
 3. `cpu.v`와 `top` **같은 버전** (IO 포트 일치)
 4. `tangnano9k.sdc`가 Design 트리에 보임
 5. **Use DONE as regular IO** 체크
-6. 산출: `impl/pnr/top_tangnano9k.fs`
+6. 산출: `impl/pnr/HAEUN16_9K.fs`
 
 상세: [fpga/GOWIN_PROJECT.md](fpga/GOWIN_PROJECT.md)
 
@@ -218,12 +233,12 @@ Gowin IDE: **Process → Reload All** → **Synthesize** → **Place & Route**
 | `EX3990` `io_out_strobe` 없음 | Gowin `cpu.v` 구버전 | `sync_gowin.ps1` 후 Reload |
 | `TA1132` sys_clk not created | `.sdc`가 `.gprj`에 없음 | Add File 또는 `sync_gowin.ps1` |
 
-### 보드 LED (top)
+### 보드 LED (top) — 실기 확인됨
 
-```verilog
-wire done = (r1 == 16'd1);   // boot.asm: LOAD R1, 1
-assign led = done ? 6'b000000 : ~r0[5:0];  // active-low
-```
+| 단계 | LED | 의미 |
+|------|-----|------|
+| 부팅 중 | 패턴 변화 / 깜빡임 | CPU 실행 중 (`~r0[5:0]`) |
+| boot 완료 | **6개 전부 ON** | `R1=1`, 펌웨어 정상 종료 |
 
 ### 프로그램 / RAM
 
@@ -254,6 +269,7 @@ assign led = done ? 6'b000000 : ~r0[5:0];  // active-low
 | v2 | JZ/CALL/RET/OUT/IN, `test_v2.asm`, `tb_cpu_v2.v` |
 | 펌웨어 | `boot.asm`, `asm.py` 라벨, `uart_tx.v` |
 | FPGA | `top_tangnano9k`, `cst`, `sdc`, Gowin `HAEUN16_9K` |
+| **보드** | Program + LED 깜빡임 → 6개 ON **실기 PASS** |
 
 ---
 
@@ -271,12 +287,17 @@ assign led = done ? 6'b000000 : ~r0[5:0];  // active-low
 
 ---
 
+## 다음 작업 (우선순위)
+
+1. **UART TX** — 터미널에서 `HAEUN-16 Boot` 확인 (USB-UART)
+2. **UART RX** (pin 18) + `IN` — 양방향 콘솔
+3. **모니터** — `help` / `echo` / `reboot` (asm)
+4. RAM 확장 / 메모리 LOAD / OS — 이후
+
 ## 향후 (선택)
 
-- UART RX (pin 18)
-- 메모리 LOAD (`RAM[Rd] ← addr`)
 - PSRAM / SD / VGA
-- OS (스케줄러, 파일시스템)
+- 인터럽트, 타이머, 멀티태스킹
 
 ---
 
