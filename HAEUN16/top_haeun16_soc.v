@@ -103,8 +103,9 @@ module top_haeun16_soc (
         .peek_data     (ram_peek_data)
     );
 
-    wire uart_wr  = io_out_strobe && (io_out_port == 8'd0);
-    wire screen_io_wr = io_out_strobe && (io_out_port == 8'd1);
+    wire uart_wr       = io_out_strobe && (io_out_port == 8'd0);
+    wire screen_io_wr  = io_out_strobe && (io_out_port == 8'd1);
+
     assign cursor_load = io_out_strobe && (io_out_port == 8'd2);
     assign cursor_val  = io_out_data[5:0];
 

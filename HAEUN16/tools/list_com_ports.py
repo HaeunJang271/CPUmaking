@@ -25,7 +25,7 @@ def classify(desc: str, hwid: str) -> str:
         return "BL702 DFU/UART 후보 (플래시/터미널용)"
     if "BL702" in blob or "BOUFFALO" in blob or "BLDEV" in blob:
         return "BL702 DFU/UART 후보 (플래시/터미널용)"
-    if "CH340" in blob or "CP210" in blob:
+    if "CH340" in blob or "CP210" in blob or "FT232" in blob or "PID_6001" in blob:
         return "외부 USB-TTL (터미널용)"
     return "기타 USB Serial"
 

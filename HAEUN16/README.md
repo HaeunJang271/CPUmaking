@@ -168,8 +168,8 @@ RX 미동작 시: [BL702_ONBOARD.md](fpga/BL702_ONBOARD.md) usb2uartjtag 펌웨�
 
 부팅 시 (`os.asm`):
 
-1. `SEND_UART` — UART에만 전체 `HAEUN-OS v0.1`
-2. `SEND` — `v0.1` → UART + HDMI (로고는 RTL 고정, HDMI에는 버전만)
+1. `SEND_UART` — UART에만 `HAEUN-OS v0.1` + 줄바꿈
+2. `SEND_HDMI` — 로고 아래 빈 줄·가운데 `v0.1` (UART에는 **안** 감)
 3. HDMI 빈 줄 — 로고 높이만큼 `\n` (`LOAD R2, 12` 등, 로고 크기에 맞게 조정)
 4. `STORE_READY` — RAM[247..252] ← `"READY\0"`
 5. `R1=1` — LED 완료 + `screen_from_ram` 미러 트리거
@@ -250,6 +250,46 @@ powershell -File tools\sync_hdmi_gowin.ps1
 | `PA2122` DPB WRITE_MODE | 듀얼포트 RAM RBW | `ram_fpga.v` write-through 패턴 (SOC 반영됨) |
 | `EX3990` 포트 불일치 | 구버전 `cpu.v` | sync 후 Reload |
 | `TA1132` sys_clk | `.sdc` 미등록 | `.gprj` FileList 확인 |
+
+### Program Device / JTAG 트러블슈팅 (Tang Nano 9K)
+
+USB 연결 후 `python tools\list_com_ports.py` 로 **COM6 + JTAG + `FACTORYAIOT_PROG`** 가 보이면 드라이버·인식은 정상입니다.  
+COM6는 **Gowin Program 전용** — miniterm 등 터미널에 열면 Program이 실패합니다.
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 장치 관리자 **알 수 없는 장치** | BL702/JTAG 드라이버 미설치 | `C:\Gowin\...\Programmer\driver\GowinUSBCableDriverV5_for_win7+.exe` 설치 → USB 재연결. 안 되면 장치 우클릭 → 드라이버 업데이트 → 위 `driver\` 폴더 지정 |
+| **no cable connection** | PC가 보드 USB를 못 봄 (COM6 없음) | 데이터용 USB-C · 본체 USB 포트 · **HDMI 뽑고** USB만 연결. Converter만 보이면 **Converter B → 속성 → 고급 → Load VCP** ([Sipeed FAQ](https://wiki.sipeed.com/hardware/en/tang/common-doc/questions.html)) |
+| **Cable failed to open** (channel / location) | COM6 점유 또는 IDE Program 버그 | miniterm·시리얼 툴·Gowin **전부 종료** → `jtagserver.exe` 종료 → USB 재연결 → **별도 Programmer** 사용 (아래) |
+| Port `USB Debugger A/0/0/null` | IDE 내장 Program이 채널을 못 염 | 위와 동일. **S2 누른 채** Scan/Program ([Nano 9K JTAG_SEL](https://wiki.sipeed.com/hardware/en/tang/common-doc/questions.html)) |
+
+**Program이 IDE에서 계속 실패할 때** — 별도 Programmer (실기 확인됨):
+
+```text
+C:\Gowin\Gowin_V1.9.11.03_Education_x64\Programmer\bin\programmer.exe
+```
+
+| 설정 | 값 |
+|------|-----|
+| Cable | Gowin USB Cable |
+| Frequency | **2.5 MHz** 이하 |
+| Device | `GW1NR-9C` |
+| File | `...\HAEUN16_SOC\impl\pnr\top_haeun16_soc.fs` |
+
+CLI로 스캔·다운로드:
+
+```powershell
+cd C:\Gowin\Gowin_V1.9.11.03_Education_x64\Programmer\bin
+.\programmer_cli.exe --scan
+.\programmer_cli.exe -d GW1NR-9C -r 1 -c Gowin `
+  -p "C:\Gowin\Gowin_V1.9.11.03_Education_x64\IDE\bin\Documents\HAEUN16_SOC\impl\pnr\top_haeun16_soc.fs"
+```
+
+(S2 누른 채 Scan/Program. Gowin 경로는 설치 버전에 맞게 수정.)
+
+**Program 성공 후:** HDMI 연결 → **S1** 리셋 → LED 6개 ON + 모니터에 HAEUN-OS.
+
+핀 납땜 직후 USB가 안 잡히면 GND–3.3V 쇼트·헤더 간섭을 의심. 상세: [fpga/BL702_ONBOARD.md](fpga/BL702_ONBOARD.md), [BOARD_QUICKSTART.md](BOARD_QUICKSTART.md).
 
 ---
 
@@ -394,7 +434,7 @@ OS 갱신: `python tools\gen_ram_os.py` → `sync_soc_gowin.ps1` → Gowin 재�
 | [ISA.md](ISA.md) | 명령어 · I/O · 화면 메모리 맵 |
 | [UART_TX.md](UART_TX.md) | PC 터미널 UART |
 | [hdmi_colorbars/HDMI_COLORBARS.md](hdmi_colorbars/HDMI_COLORBARS.md) | HDMI 단독 빌드 |
-| [BOARD_QUICKSTART.md](BOARD_QUICKSTART.md) | 보드 10분 |
+| [BOARD_QUICKSTART.md](BOARD_QUICKSTART.md) | 보드 10분 · Program/JTAG (README § Program Device 트러블슈팅) |
 | [fpga/GOWIN_PROJECT.md](fpga/GOWIN_PROJECT.md) | Gowin IDE |
 | [fpga/BL702_ONBOARD.md](fpga/BL702_ONBOARD.md) | 온보드 BL702 |
 

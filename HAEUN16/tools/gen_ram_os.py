@@ -29,13 +29,17 @@ def main():
         + "\n".join("        " + l for l in mem_lines)
         + "\n    end"
     )
-    text = re.sub(
-        r"    initial begin.*?    end\n\n    always @",
-        init + "\n\n    always @",
+    new_text, n = re.subn(
+        r"    initial begin.*?    end\n",
+        init + "\n",
         text,
+        count=1,
         flags=re.S,
     )
-    RAM.write_text(text, encoding="utf-8")
+    if n != 1:
+        print(f"ERROR: initial block not replaced (matches={n})", file=sys.stderr)
+        sys.exit(1)
+    RAM.write_text(new_text, encoding="utf-8")
     print(f"Updated {RAM.name} ({len(mem_lines)} words)")
 
 

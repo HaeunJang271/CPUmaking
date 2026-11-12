@@ -1,14 +1,13 @@
 ; ============================================================================
-; os.asm - HAEUN-OS v0.1 (UART + HDMI 셸)
+; os.asm - HAEUN-OS v0.1 (UART + HDMI 셸) — 안정 레이아웃
 ; ============================================================================
-; 명령: help | echo <text> | version | reboot
-; port 0 = UART RX/TX, port 1 = HDMI stream, port 2 = HDMI cursor
-; RECV = 키보드(UART) 수신 + UART·HDMI 로컬 에코 (CR→LF)
+; port 0=UART  port 1=HDMI stream  port 2=HDMI cursor
+; SHELL_ROW=48 : 부트(~47자) 아래 입력 줄 (매 프롬프트마다 커서 리셋)
 ; ============================================================================
 
     JMP BOOT
 
-; --- I/O primitives ---------------------------------------------------------
+; --- I/O --------------------------------------------------------------------
 SEND:
     OUT R0, 0
     OUT R0, 1
@@ -42,14 +41,41 @@ SEND_CR:
     CALL SEND
     RET
 
-PRINT_PROMPT:
-    LOAD R0, 62
-    CALL SEND
-    LOAD R0, 32
-    CALL SEND
+SEND_CR_HDMI:
+    LOAD R0, 10
+    CALL SEND_HDMI
     RET
 
-; RAM[247..] = "READY\0" -> HDMI 미러 (빈 줄은 스트림으로)
+SEND_CR_UART:
+    LOAD R0, 10
+    CALL SEND_UART
+    RET
+
+; Enter(LF/CR) 확인 — 아니면 UNKNOWN
+MATCH_NL:
+    LOAD R2, 10
+    SUB R0, R2
+    JZ R0, MATCH_NL_OK
+    LOAD R2, 13
+    SUB R0, R2
+    JZ R0, MATCH_NL_OK
+    JMP UNKNOWN
+MATCH_NL_OK:
+    RET
+
+PRINT_PROMPT:
+    LOAD R0, 48
+    OUT R0, 2
+    LOAD R0, 62
+    CALL SEND_UART
+    LOAD R0, 32
+    CALL SEND_UART
+    LOAD R0, 62
+    CALL SEND_HDMI
+    LOAD R0, 32
+    CALL SEND_HDMI
+    RET
+
 STORE_READY:
     LOAD R0, 82
     STORE R0, 247
@@ -80,8 +106,6 @@ WM_D:
     RET
 
 ; --- boot -------------------------------------------------------------------
-; HDMI: RTL /|\ ASCII "HAEUN-OS" 로고 + 아래 일반 "v0.1"
-; UART: 전체 "HAEUN-OS v0.1"
 BOOT:
     LOAD R0, 72
     CALL SEND_UART
@@ -102,15 +126,14 @@ BOOT:
     LOAD R0, 32
     CALL SEND_UART
     LOAD R0, 118
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 48
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 46
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 49
-    CALL SEND
-    CALL SEND_CR
-    ; HDMI: 비트맵 로고(~68px+여백) 아래 + 가운데 v0.1
+    CALL SEND_UART
+    CALL SEND_CR_UART
     LOAD R2, 12
 BOOT_NL:
     LOAD R0, 10
@@ -141,18 +164,15 @@ BOOT_VER:
     CALL SEND_HDMI
     LOAD R0, 49
     CALL SEND_HDMI
-    CALL SEND_CR
+    CALL SEND_CR_HDMI
     CALL STORE_READY
     LOAD R1, 1
     CALL WAIT_MIRROR
-    LOAD R0, 19
-    OUT R0, 2
-    CALL SEND_CR
-    CALL SEND_CR
-    LOAD R0, 21
+    CALL SEND_CR_HDMI
+    LOAD R0, 48
     OUT R0, 2
 
-; --- shell loop -------------------------------------------------------------
+; --- shell ------------------------------------------------------------------
 SHELL:
     CALL PRINT_PROMPT
     CALL RECV
@@ -180,7 +200,6 @@ SHELL:
     JZ R0, CHK_REBOOT
     JMP UNKNOWN
 
-; --- help -------------------------------------------------------------------
 CHK_HELP:
     CALL RECV
     LOAD R2, 101
@@ -201,64 +220,59 @@ CHK_HELP_P:
     JMP UNKNOWN
 CHK_HELP_NL:
     CALL RECV
-    LOAD R2, 10
-    SUB R0, R2
-    JZ R0, DO_HELP
-    JMP UNKNOWN
-
+    CALL MATCH_NL
 DO_HELP:
     LOAD R0, 104
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 101
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 108
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 112
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 32
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 101
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 99
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 104
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 111
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 32
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 118
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 101
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 114
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 115
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 105
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 111
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 110
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 32
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 114
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 101
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 98
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 111
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 111
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 116
-    CALL SEND
-    CALL SEND_CR
+    CALL SEND_UART
+    CALL SEND_CR_UART
     JMP SHELL
 
-; --- version ----------------------------------------------------------------
 CHK_VER:
     CALL RECV
     LOAD R2, 101
@@ -297,24 +311,28 @@ CHK_VER_N:
     JMP UNKNOWN
 CHK_VER_NL:
     CALL RECV
-    LOAD R2, 10
-    SUB R0, R2
-    JZ R0, DO_VERSION
-    JMP UNKNOWN
-
+    CALL MATCH_NL
 DO_VERSION:
     LOAD R0, 118
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 48
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 46
-    CALL SEND
+    CALL SEND_UART
     LOAD R0, 49
-    CALL SEND
-    CALL SEND_CR
+    CALL SEND_UART
+    CALL SEND_CR_UART
+    LOAD R0, 118
+    CALL SEND_HDMI
+    LOAD R0, 48
+    CALL SEND_HDMI
+    LOAD R0, 46
+    CALL SEND_HDMI
+    LOAD R0, 49
+    CALL SEND_HDMI
+    CALL SEND_CR_HDMI
     JMP SHELL
 
-; --- echo (수신 완료 후 출력 — help/version 과 동일 패턴) --------------------
 CHK_ECHO:
     CALL RECV
     LOAD R2, 99
@@ -343,12 +361,16 @@ DO_ECHO:
     ADD R0, R3
     SUB R0, R2
     JZ R0, ECHO_DONE
+    LOAD R2, 13
+    LOAD R0, 0
+    ADD R0, R3
+    SUB R0, R2
+    JZ R0, ECHO_DONE
     JMP DO_ECHO
 ECHO_DONE:
     CALL SEND_CR
     JMP SHELL
 
-; --- reboot -----------------------------------------------------------------
 CHK_REBOOT:
     CALL RECV
     LOAD R2, 101
@@ -381,14 +403,11 @@ CHK_REBOOT_T:
     JMP UNKNOWN
 CHK_REBOOT_NL:
     CALL RECV
-    LOAD R2, 10
-    SUB R0, R2
-    JZ R0, BOOT
-    JMP UNKNOWN
+    CALL MATCH_NL
+    JMP BOOT
 
-; --- unknown ----------------------------------------------------------------
 UNKNOWN:
     LOAD R0, 63
-    CALL SEND
-    CALL SEND_CR
+    CALL SEND_UART
+    CALL SEND_CR_UART
     JMP SHELL

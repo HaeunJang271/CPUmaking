@@ -48,43 +48,48 @@ def hex_preview(buf, n=64):
 def main():
     print(f"=== UART reset sniff on {PORT} ===\n")
     print("Close miniterm first (Ctrl+]).")
-    print("Baseline 2s, then press S1 within the next 3s.\n")
+    print("S1 리셋 → 2.5초 BL702 대기 → 10초 수신 (115200).\n")
 
     try:
         ser = serial.Serial(PORT, 115200, timeout=0.15)
+        ser.dtr = False
+        ser.rts = False
     except serial.SerialException as e:
         print(f"OPEN FAIL: {e}")
         print("Another program (miniterm) may be using the port.")
         return 1
 
-    before = read_for(ser, 2.0)
-    print(f"Before S1: {len(before)} bytes")
-    print(f"  hex: {hex_preview(before)}")
-
-    print("\n>>> Press S1 NOW <<<")
-    after = read_for(ser, 3.0)
+    ser.reset_input_buffer()
+    print(">>> Press S1 NOW <<<")
+    glitch = read_for(ser, 0.5)
+    print("BL702 hold 2.5s...")
+    time.sleep(2.5)
+    boot = read_for(ser, 10.0)
     ser.close()
 
-    print(f"\nAfter S1:  {len(after)} bytes")
-    print(f"  hex: {hex_preview(after)}")
+    print(f"\nReset glitch (0.5s): {len(glitch)} bytes")
+    print(f"  hex: {hex_preview(glitch)}")
+    print(f"After BL702 (10s):   {len(boot)} bytes")
+    print(f"  hex: {hex_preview(boot)}")
+    if boot:
+        print(f"  txt: {boot[:120].decode('ascii', errors='replace')!r}")
 
-    if b"HAEUN" in after:
-        print("\n*** Found HAEUN in post-reset stream at 115200 ***")
-        text = after.decode("utf-8", errors="replace")
-        print(text[:300])
+    if b"HAEUN" in boot:
+        print("\n*** HAEUN-OS boot at 115200 ***")
+        print(boot.decode("utf-8", errors="replace")[:300])
         return 0
 
-    if len(before) == len(after) and before == after:
-        print("\nStreams identical - FPGA UART may not be connected to this port,")
-        print("or the bitstream on the board is not HAEUN16 (Program Device again).")
-    elif abs(len(after) - len(before)) < 20:
-        print("\nByte count barely changed - S1 may not reset CPU, or baud is wrong")
-        print("(garbage looks the same before/after).")
+    if len(glitch) > 0 and len(boot) == 0:
+        print(
+            "\n리셋 직후 짧은 깨진 바이트만 있고 부트 없음."
+            "\n→ pin37 배선/GND 또는 ext_uart Program(-ExtUart) 점검."
+        )
+    elif len(boot) > 0 and b"HAEUN" not in boot:
+        print("\n뭔가 왔지만 HAEUN-OS 아님 → gen_ram + Program 또는 보드레이트 스캔.")
     else:
-        print(f"\nByte count changed ({len(before)} -> {len(after)}) - reset likely fired,")
-        print("but 115200 decode is wrong. Scanning baud rates...\n")
+        print("\n부트 UART 무신호 → 배선·Program·top_haeun16_soc 확인.")
 
-    print("Scan baud (press S1 once at start of scan):\n")
+    print("\nScan baud (S1 once at start of scan):\n")
     best = (0, 0, b"")
     for b in BAUDS:
         try:
@@ -105,12 +110,11 @@ def main():
         print(best[2].decode("utf-8", errors="replace")[:200])
     else:
         print("\nNo boot string at any baud.")
-        print("Checklist:")
-        print("  1. Gowin -> Program Device -> HAEUN16_9K.fs (uart_tx on pin 17)")
-        print("  2. S1: LEDs blink then all 6 ON (CPU boot OK)")
-        print("  3. Close Gowin completely, unplug/replug USB (BL702 UART recovery)")
-        print("  4. Use the higher COM (UART), not the lower one (JTAG)")
-        print("  5. Try top_uart_smoke (UART_TX.md) to isolate pin 17 path")
+        print("Checklist (외부 FT232 → pin 37/38):")
+        print("  1. pwsh -File tools\\sync_soc_gowin.ps1 -ExtUart → Gowin Program (top_haeun16_soc)")
+        print("  2. 배선: FPGA37→동글RX, FPGA38←동글TX, GND")
+        print("  3. S1 후 LED 6개 ON + HDMI READY → CPU OK, UART만 점검")
+        print("  4. COM7=FT232(0403:6001), miniterm/Gowin 종료 후 테스트")
     return 0
 
 

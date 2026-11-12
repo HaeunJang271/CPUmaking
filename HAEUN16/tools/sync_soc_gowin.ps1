@@ -3,7 +3,9 @@
 
 param(
     [string]$GowinRoot = "C:\Gowin\Gowin_V1.9.11.03_Education_x64\IDE\bin\Documents\HAEUN16_SOC",
-    [switch]$ExtUart
+    [switch]$ExtUart,
+    [switch]$ExtUartTx38,
+    [switch]$UartOnly
 )
 
 $Root = Split-Path -Parent $PSScriptRoot
@@ -17,7 +19,8 @@ $CpuFiles = @(
     "cpu.v", "alu.v", "pc.v", "register16.v", "ram_fpga.v",
     "uart_tx.v", "uart_rx.v", "uart_fifo_tx.v", "uart_fifo_rx.v", "uart_path_bl702.v",
     "bl702_boot_delay.v",
-    "top_haeun16_soc.v", "screen_ram.v", "screen_bridge.v", "screen_from_ram.v",
+    "top_haeun16_soc.v", "top_uart_rx_echo.v", "top_uart_tx_only.v", "top_uart_smoke.v", "uart_msg_tx.v",
+    "screen_ram.v", "screen_bridge.v", "screen_from_ram.v",
     "screen_char_fifo.v",
     "screen_status.v", "screen_io_tx.v"
 )
@@ -54,7 +57,16 @@ Write-Host "Synced hdmi_colorbars\src -> $GowinSrc"
 
 Copy-Item -Force (Join-Path $Root "soc\tangnano9k_soc.cst") (Join-Path $GowinSrc "tangnano9k_soc.cst")
 Copy-Item -Force (Join-Path $Root "soc\tangnano9k_soc_ext_uart.cst") (Join-Path $GowinSrc "tangnano9k_soc_ext_uart.cst")
-if ($ExtUart) {
+Copy-Item -Force (Join-Path $Root "soc\tangnano9k_soc_ext_uart_tx38.cst") (Join-Path $GowinSrc "tangnano9k_soc_ext_uart_tx38.cst")
+Copy-Item -Force (Join-Path $Root "soc\tangnano9k_uart_only_ext.cst") (Join-Path $GowinSrc "tangnano9k_uart_only_ext.cst")
+if ($UartOnly) {
+    Copy-Item -Force (Join-Path $Root "soc\tangnano9k_uart_only_ext.cst") (Join-Path $GowinSrc "tangnano9k_soc.cst")
+    Write-Host "CST: uart_only ext (pin37/38, HDMI 없음) -> tangnano9k_soc.cst"
+    Write-Host "      top: top_uart_rx_echo / top_uart_tx_only"
+} elseif ($ExtUartTx38) {
+    Copy-Item -Force (Join-Path $Root "soc\tangnano9k_soc_ext_uart_tx38.cst") (Join-Path $GowinSrc "tangnano9k_soc.cst")
+    Write-Host "CST: ext_uart TX38 (pin38=TX, pin37=RX) -> tangnano9k_soc.cst"
+} elseif ($ExtUart) {
     Copy-Item -Force (Join-Path $Root "soc\tangnano9k_soc_ext_uart.cst") (Join-Path $GowinSrc "tangnano9k_soc.cst")
     Write-Host "CST: tangnano9k_soc_ext_uart (pin 37/38) -> tangnano9k_soc.cst"
 } else {
@@ -95,9 +107,19 @@ Write-Host "Gowin IDE:"
 Write-Host "  1. Open $GowinRoot\HAEUN16_SOC.gprj"
 Write-Host "  2. Project -> Reload All  (권장; screen_from_ram 은 svo_hdmi_soc `include 로도 포함됨)"
 Write-Host "  3. Top module: top_haeun16_soc"
+if ($UartOnly) {
+    Write-Host "     (UART 테스트 시: top_uart_rx_echo 또는 top_uart_tx_only)"
+}
 Write-Host "  4. Synthesize -> Place & Route -> Generate Bitstream -> Program"
 Write-Host "  5. HDMI: HAEUN-OS v0.1 + 프롬프트 >  (UART 병행)"
-if ($ExtUart) {
+if ($UartOnly) {
+    Write-Host ""
+    Write-Host "UART-only cst (HDMI 핀 없음). 테스트 후 OS 복귀:"
+    Write-Host "  pwsh -File tools\sync_soc_gowin.ps1 -ExtUart"
+} elseif ($ExtUartTx38) {
+    Write-Host ""
+    Write-Host "Ext UART TX38: pin38->동글RX, pin37<-동글TX, GND. PC=동글 COM 115200"
+} elseif ($ExtUart) {
     Write-Host ""
     Write-Host "Ext UART: pin37->동글RX, pin38<-동글TX, GND. PC=동글 COM 115200"
     Write-Host "Guide: fpga\EXT_UART_KEYBOARD.md"

@@ -5,8 +5,8 @@
 // ============================================================================
 
 module uart_fifo_rx #(
-    parameter FIFO_DEPTH = 16,
-    parameter ADDR_BITS  = 4,
+    parameter FIFO_DEPTH = 32,
+    parameter ADDR_BITS  = 5,
     parameter integer CLK_HZ   = 27_000_000,
     parameter integer BAUDRATE = 115200
 )(

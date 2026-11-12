@@ -27,6 +27,10 @@
         <File path="src/screen_status.v" type="file.verilog" enable="1"/>
         <File path="src/svo_hdmi_soc.v" type="file.verilog" enable="1"/>
         <File path="src/top_haeun16_soc.v" type="file.verilog" enable="1"/>
+        <File path="src/top_uart_rx_echo.v" type="file.verilog" enable="1"/>
+        <File path="src/top_uart_tx_only.v" type="file.verilog" enable="1"/>
+        <File path="src/top_uart_smoke.v" type="file.verilog" enable="1"/>
+        <File path="src/uart_msg_tx.v" type="file.verilog" enable="1"/>
         <File path="src/uart_fifo_rx.v" type="file.verilog" enable="1"/>
         <File path="src/uart_fifo_tx.v" type="file.verilog" enable="1"/>
         <File path="src/uart_path_bl702.v" type="file.verilog" enable="1"/>
